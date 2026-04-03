@@ -81,6 +81,14 @@ model_list:
       supports_video: true
       tags: [vision, video-input, gemini]
 
+  - model_name: gemini-image-gen
+    litellm_params:
+      model: gemini/nano-banana-2
+      api_key: os.environ/GEMINI_API_KEY
+    model_info:
+      mode: image_generation
+      tags: [image-gen, gemini]
+
   # ── SiliconFlow ───────────────────────────────────────────────────
 
   - model_name: siliconflow-chat

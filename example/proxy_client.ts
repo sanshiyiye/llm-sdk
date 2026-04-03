@@ -45,6 +45,16 @@ async function main() {
     console.log('代理返回:', response3.content)
     console.log()
 
+    // 5. 测试 4：生图 (image-gen)
+    // 这里使用我们在 config.yaml 中配置的生图能力。
+    // 之前我们将它指向了 gemini-image-gen (nano-banana-2)
+    console.log('测试 4: 生图请求 (image-gen)')
+    console.log('正在生成像素休闲游戏资源图...')
+    const start4 = Date.now()
+    const imageUrl = await proxyClient.imageGen('像素风格的休闲游戏资源列表图，包含小草、石头、树木、金币、爱心，16x16 像素，清晰整齐的网格布局')
+    console.log(`[耗时 ${Date.now() - start4}ms] 图片 URL:`, imageUrl)
+    console.log()
+
     console.log('🎉 所有 Proxy 调用测试完成！')
     
   } catch (error: any) {
