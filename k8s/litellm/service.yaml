@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm-proxy
+  namespace: llm-system
+  labels:
+    app: litellm-proxy
+spec:
+  type: ClusterIP
+  selector:
+    app: litellm-proxy
+  ports:
+    - name: http
+      port: 4000
+      targetPort: 4000
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP

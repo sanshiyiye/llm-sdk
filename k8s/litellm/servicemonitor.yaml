@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: litellm-proxy
+  namespace: llm-system
+  labels:
+    app: litellm-proxy
+spec:
+  selector:
+    matchLabels:
+      app: litellm-proxy
+  namespaceSelector:
+    matchNames:
+      - llm-system
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s

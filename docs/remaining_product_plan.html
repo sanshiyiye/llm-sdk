@@ -1,0 +1,241 @@
+
+<style>
+.wrap { padding: 8px 0 16px; }
+.phase { margin-bottom: 18px; border-radius: 12px; overflow: hidden; border: 0.5px solid var(--color-border-tertiary); }
+.ph { padding: 11px 16px; display: flex; align-items: center; gap: 10px; background: var(--color-background-secondary); }
+.ph-title { font-size: 14px; font-weight: 500; color: var(--color-text-primary); flex: 1; }
+.ph-note { font-size: 12px; color: var(--color-text-secondary); }
+.badge { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+.b-amber { background: var(--color-background-warning); color: var(--color-text-warning); }
+.b-purple { background: #EEEDFE; color: #3C3489; }
+.b-gray  { background: var(--color-background-secondary); color: var(--color-text-secondary); border: 0.5px solid var(--color-border-secondary); }
+.body { padding: 4px 16px 12px; }
+.group-label { font-size: 11px; font-weight: 500; color: var(--color-text-tertiary); letter-spacing: 0.04em; text-transform: uppercase; margin: 10px 0 4px; }
+.task { display: flex; gap: 8px; padding: 7px 10px; border-radius: 6px; margin-bottom: 3px; cursor: pointer; transition: background .15s; }
+.task:hover { background: var(--color-background-secondary); }
+.bullet { width: 6px; height: 6px; border-radius: 50%; background: var(--color-border-secondary); flex-shrink: 0; margin-top: 6px; }
+.bullet.hi { background: var(--color-text-warning); }
+.bullet.med { background: #7F77DD; }
+.bullet.lo { background: var(--color-border-secondary); }
+.task-body { flex: 1; }
+.task-name { font-size: 13px; color: var(--color-text-primary); line-height: 1.4; }
+.task-sub { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; line-height: 1.5; }
+.tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+.tag { font-size: 10px; padding: 1px 6px; border-radius: 3px; border: 0.5px solid var(--color-border-tertiary); color: var(--color-text-secondary); background: var(--color-background-secondary); }
+.tag.py { color: #3B6D11; background: #EAF3DE; }
+.tag.ts { color: #0C447C; background: #E6F1FB; }
+.tag.go { color: #633806; background: #FAEEDA; }
+.tag.k8s { color: #3C3489; background: #EEEDFE; }
+.tag.cfg { color: #712B13; background: #FAECE7; }
+.tag.ci { color: #5F5E5A; background: #F1EFE8; }
+.divider { height: 0.5px; background: var(--color-border-tertiary); margin: 6px 0; }
+.legend { display: flex; gap: 16px; padding: 8px 16px 4px; font-size: 11px; color: var(--color-text-tertiary); }
+.leg { display: flex; align-items: center; gap: 5px; }
+.leg-dot { width: 6px; height: 6px; border-radius: 50%; }
+</style>
+
+<div class="wrap">
+
+<div class="legend">
+  <div class="leg"><div class="leg-dot" style="background:var(--color-text-warning)"></div>高优先级</div>
+  <div class="leg"><div class="leg-dot" style="background:#7F77DD"></div>中优先级</div>
+  <div class="leg"><div class="leg-dot" style="background:var(--color-border-secondary)"></div>低优先级</div>
+</div>
+
+<!-- Phase 3 -->
+<div class="phase">
+  <div class="ph">
+    <span class="badge b-amber">阶段三</span>
+    <span class="ph-title">效率 · 可靠性 · 可观测性</span>
+    <span class="ph-note">v0.4.0 目标</span>
+  </div>
+  <div class="body">
+
+    <div class="group-label">工程质量（已交付但不完整）</div>
+
+    <div class="task" onclick="sendPrompt('三语言统一集成测试套件怎么设计？需要真实 Proxy 吗？')">
+      <div class="bullet hi"></div>
+      <div class="task-body">
+        <div class="task-name">三语言集成测试套件</div>
+        <div class="task-sub">当前只有单元测试（mock）；需要对真实 Proxy 的端到端 smoke test，验证三端行为一致</div>
+        <div class="tags"><span class="tag py">Python</span><span class="tag ts">TypeScript</span><span class="tag go">Go</span><span class="tag ci">CI</span></div>
+      </div>
+    </div>
+
+    <div class="task" onclick="sendPrompt('Python SDK 的 chat_stream 应该用 sync generator 还是 async generator？现在的实现对吗？')">
+      <div class="bullet hi"></div>
+      <div class="task-body">
+        <div class="task-name">Python chat_stream 同步/异步对齐</div>
+        <div class="task-sub">当前实现是 sync Iterator；若业务用 asyncio，需提供 async 版本 chat_stream_async</div>
+        <div class="tags"><span class="tag py">Python</span></div>
+      </div>
+    </div>
+
+    <div class="task" onclick="sendPrompt('Go SDK 的 ChatStructured 用反射生成 JSON Schema，有什么局限？')">
+      <div class="bullet hi"></div>
+      <div class="task-body">
+        <div class="task-name">Go ChatStructured schema 生成升级</div>
+        <div class="task-sub">当前用 marshal+反推类型，缺少嵌套 struct、slice、optional 字段支持；引入 invopop/jsonschema</div>
+        <div class="tags"><span class="tag go">Go</span></div>
+      </div>
+    </div>
+
+    <div class="task" onclick="sendPrompt('CI/CD pipeline 怎么设计来保证三语言测试都通过才能合并？')">
+      <div class="bullet hi"></div>
+      <div class="task-body">
+        <div class="task-name">CI Pipeline（GitHub Actions）</div>
+        <div class="task-sub">三语言 lint + test 并行跑，PR 必须全绿才能合并；含 go vet、tsc --noEmit、pytest</div>
+        <div class="tags"><span class="tag ci">CI</span><span class="tag py">Python</span><span class="tag ts">TypeScript</span><span class="tag go">Go</span></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="group-label">新增能力</div>
+
+    <div class="task" onclick="sendPrompt('请求级缓存怎么设计？key 怎么生成？TTL 多久合适？')">
+      <div class="bullet hi"></div>
+      <div class="task-body">
+        <div class="task-name">请求级缓存（3-1）</div>
+        <div class="task-sub">key = hash(model + messages)；内存 TTLCache 默认，可选 Redis 后端；仅缓存非流式调用</div>
+        <div class="tags"><span class="tag py">Python</span><span class="tag ts">TypeScript</span></div>
+      </div>
+    </div>
+
+    <div class="task" onclick="sendPrompt('Tool use / Function calling 三语言封装怎么实现？@llm_tool 装饰器如何自动生成 schema？')">
+      <div class="bullet hi"></div>
+      <div class="task-body">
+        <div class="task-name">Tool use / Function calling（3-2）</div>
+        <div class="task-sub">@llm_tool 装饰器自动生成 schema；SDK 处理 tool_call 循环，业务层只传函数列表</div>
+        <div class="tags"><span class="tag py">Python</span><span class="tag ts">TypeScript</span><span class="tag go">Go</span></div>
+      </div>
+    </div>
+
+    <div class="task" onclick="sendPrompt('LiteLLM Proxy 的 Prometheus metrics 怎么在 K8s 里接入？需要 ServiceMonitor 吗？')">
+      <div class="bullet med"></div>
+      <div class="task-body">
+        <div class="task-name">Token 用量 + 延迟统计（3-3）</div>
+        <div class="task-sub">Proxy 开 /metrics 端口；K8s 新增 ServiceMonitor；Grafana 看板模板</div>
+        <div class="tags"><span class="tag k8s">K8s</span><span class="tag cfg">config</span></div>
+      </div>
+    </div>
+
+    <div class="task" onclick="sendPrompt('SDK 层还需要什么工程质量措施才能算产品级？')">
+      <div class="bullet med"></div>
+      <div class="task-body">
+        <div class="task-name">Python 包发布配置</div>
+        <div class="task-sub">完善 pyproject.toml（entry points、classifiers）；TypeScript 完善 package.json exports 字段；Go module 版本 tag</div>
+        <div class="tags"><span class="tag py">Python</span><span class="tag ts">TypeScript</span><span class="tag go">Go</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Phase 4 -->
+<div class="phase">
+  <div class="ph">
+    <span class="badge b-purple">阶段四</span>
+    <span class="ph-title">可观测性 · 治理 · 高可用</span>
+    <span class="ph-note">v1.0.0 目标</span>
+  </div>
+  <div class="body">
+
+    <div class="group-label">可观测性</div>
+
+    <div class="task" onclick="sendPrompt('Langfuse 如何接入 LiteLLM Proxy？需要改哪些配置？')">
+      <div class="bullet hi"></div>
+      <div class="task-body">
+        <div class="task-name">Langfuse 可观测性接入（4-1）</div>
+        <div class="task-sub">config.yaml 添加 success/failure callback；K8s Secret 新增 Langfuse keys；上报 prompt、token、延迟</div>
+        <div class="tags"><span class="tag cfg">config</span><span class="tag k8s">K8s</span></div>
+      </div>
+    </div>
+
+    <div class="task" onclick="sendPrompt('LiteLLM 的 database_url 审计日志怎么配？PostgreSQL 需要建哪些表？')">
+      <div class="bullet med"></div>
+      <div class="task-body">
+        <div class="task-name">请求审计日志持久化（4-2）</div>
+        <div class="task-sub">Proxy 接 PostgreSQL；K8s 新增 PG StatefulSet 或外部托管 DB；Secret 添加 DATABASE_URL</div>
+        <div class="tags"><span class="tag cfg">config</span><span class="tag k8s">K8s</span></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="group-label">质量治理</div>
+
+    <div class="task" onclick="sendPrompt('模型 A/B 评估框架怎么设计？评分器用什么？')">
+      <div class="bullet med"></div>
+      <div class="task-body">
+        <div class="task-name">模型 A/B 评估框架（4-3）</div>
+        <div class="task-sub">同批 prompt 跑两个模型；对比延迟 p50/p95、token 用量、LLM 自动评分；输出对比报告</div>
+        <div class="tags"><span class="tag py">Python</span></div>
+      </div>
+    </div>
+
+    <div class="task" onclick="sendPrompt('K8s 多集群 Proxy 高可用怎么做？用 Cloudflare 还是 Route53？')">
+      <div class="bullet lo"></div>
+      <div class="task-body">
+        <div class="task-name">多集群 / 跨地域高可用（4-4）</div>
+        <div class="task-sub">多 region 各部署一套 llm-system；全局 LB 路由最近节点；各集群 Secret 独立</div>
+        <div class="tags"><span class="tag k8s">K8s</span></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="group-label">安全加固（原计划未列，产品级必须）</div>
+
+    <div class="task" onclick="sendPrompt('LiteLLM Proxy 的 master_key 之外还需要哪些访问控制措施？')">
+      <div class="bullet hi"></div>
+      <div class="task-body">
+        <div class="task-name">业务服务级别的 API Key 隔离</div>
+        <div class="task-sub">每个业务服务用独立 virtual key（LiteLLM key management）；不同服务设不同限流配额；key 可吊销</div>
+        <div class="tags"><span class="tag cfg">config</span><span class="tag k8s">K8s</span></div>
+      </div>
+    </div>
+
+    <div class="task" onclick="sendPrompt('K8s NetworkPolicy 怎么限制只有 apps namespace 能访问 llm-system？')">
+      <div class="bullet med"></div>
+      <div class="task-body">
+        <div class="task-name">K8s NetworkPolicy 网络隔离</div>
+        <div class="task-sub">限制只有 apps namespace 的 Pod 能访问 litellm-proxy；拒绝集群外直接访问</div>
+        <div class="tags"><span class="tag k8s">K8s</span></div>
+      </div>
+    </div>
+
+    <div class="task" onclick="sendPrompt('Sealed Secrets 或 External Secrets Operator 怎么在这套 K8s 里落地？')">
+      <div class="bullet med"></div>
+      <div class="task-body">
+        <div class="task-name">Secret 管理自动化</div>
+        <div class="task-sub">当前是手动 kubectl create secret；引入 Sealed Secrets 或 External Secrets Operator，secret 纳入 GitOps</div>
+        <div class="tags"><span class="tag k8s">K8s</span><span class="tag ci">CI</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Version roadmap -->
+<div class="phase">
+  <div class="ph">
+    <span class="badge b-gray">版本路线</span>
+    <span class="ph-title">里程碑对照</span>
+  </div>
+  <div class="body" style="padding-top:10px">
+    <div style="display:grid;grid-template-columns:90px 1fr;gap:6px 12px;font-size:12px;">
+      <div style="color:var(--color-text-success);font-weight:500">v0.2.0 ✓</div>
+      <div style="color:var(--color-text-secondary)">已交付：三语言 chat / embed / image_gen / stream / session / structured / templates / errors + 测试</div>
+      <div style="color:var(--color-text-warning);font-weight:500">v0.3.0</div>
+      <div style="color:var(--color-text-secondary)">Python async stream + Go schema 升级 + CI Pipeline</div>
+      <div style="color:var(--color-text-warning);font-weight:500">v0.4.0</div>
+      <div style="color:var(--color-text-secondary)">缓存 + Tool use + Prometheus metrics + 集成测试套件 + 包发布配置</div>
+      <div style="color:#534AB7;font-weight:500">v0.5.0</div>
+      <div style="color:var(--color-text-secondary)">业务服务 virtual key 隔离 + NetworkPolicy + Secret 自动化</div>
+      <div style="color:#534AB7;font-weight:500">v1.0.0</div>
+      <div style="color:var(--color-text-secondary)">Langfuse + 审计日志 + A/B 评估框架</div>
+      <div style="color:var(--color-text-tertiary);font-weight:500">v1.x</div>
+      <div style="color:var(--color-text-tertiary)">多集群高可用（按需）</div>
+    </div>
+  </div>
+</div>
+
+</div>

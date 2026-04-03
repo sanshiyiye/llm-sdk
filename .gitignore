@@ -1,0 +1,45 @@
+# 环境变量和秘钥
+.env
+.env.*
+!.env.example
+k8s/litellm/secret.yaml
+litellm.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Node.js & TypeScript
+node_modules/
+dist/
+*.js.map
+.npm/
+npm-debug.log*
+
+# Go
+*.test
+*.exe
+coverage.out
+vendor/
+
+# Sisyphus/AI Agent 
+.sisyphus/
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
