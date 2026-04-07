@@ -24,14 +24,18 @@ LiteLLM Proxy (L3)  localhost:4000 | litellm-proxy.llm-system:4000
 
 ```bash
 pip install "litellm[proxy]"
-cp .env.example .env          # 填入 API Keys
-litellm --config config/config.yaml --port 4000
+cp proxy/.env.example proxy/.env   # 填入 API Keys
+python proxy/start_proxy.py
 ```
 
 ### 2. Python
 
 ```bash
-cd python
+pip install llm-sdk
+```
+
+```bash
+cd sdk/python
 pip install -e ".[dev]"
 ```
 
@@ -66,7 +70,7 @@ r1 = session.chat("审查这段代码：...")
 r2 = session.chat("给出修复方案")
 
 # Prompt 模板
-templates.load_dir("prompts/")
+templates.load_dir("../prompts")
 reply = templates.chat_with_template(client, "code_review",
     language="Python", focus="内存泄漏", code="x = []")
 ```
@@ -74,12 +78,16 @@ reply = templates.chat_with_template(client, "code_review",
 ### 3. TypeScript / Node.js
 
 ```bash
-cd typescript
+npm install @goat/llm-sdk
+```
+
+```bash
+cd sdk/typescript
 npm install
 ```
 
 ```typescript
-import { client, templates } from './index'
+import { client, templates } from '@goat/llm-sdk'
 import { z } from 'zod'
 
 // 基础对话
@@ -100,7 +108,7 @@ const r1 = await sess.chat('审查这段代码：...')
 const r2 = await sess.chat('给出修复方案')
 
 // Prompt 模板
-templates.loadDir('prompts/')
+templates.loadDir('../prompts')
 const reply2 = await templates.chatWithTemplate(client, 'code_review',
   { language: 'TypeScript', focus: '类型安全', code: 'const x = 1' })
 ```
@@ -108,7 +116,11 @@ const reply2 = await templates.chatWithTemplate(client, 'code_review',
 ### 4. Go
 
 ```bash
-cd go
+go get github.com/goat/llm-sdk/sdk/go
+```
+
+```bash
+cd sdk/go
 go test ./...
 ```
 
@@ -118,7 +130,7 @@ package main
 import (
     "context"
     "fmt"
-    "github.com/yourorg/llm-sdk/go"
+    "github.com/goat/llm-sdk/sdk/go"
 )
 
 func main() {
@@ -181,13 +193,13 @@ func main() {
 
 ```bash
 # Python
-cd python && pytest tests/ -v
+cd sdk/python && pytest tests/ -v
 
 # TypeScript
-cd typescript && npm test
+cd sdk/typescript && npm test
 
 # Go
-cd go && go test ./... -v
+cd sdk/go && go test ./... -v
 ```
 
 ---
@@ -204,17 +216,21 @@ kubectl create secret generic litellm-secrets \
   --from-literal=LITELLM_MASTER_KEY=sk-litellm-...
 
 # 一键部署
-kubectl apply -k k8s/
+kubectl apply -k proxy/k8s/
 
 # 业务服务通过集群 DNS 访问
 # http://litellm-proxy.llm-system:4000
 ```
 
-详细部署说明见 `docs/llm-sdk-design.md`。
+详细部署说明见 [llm-sdk-design.md](file:///d:/workspace/AI/llm-sdk/docs/llm-sdk-design.md)。
+
+发布检查清单见 [release-checklist.md](file:///d:/workspace/AI/llm-sdk/docs/release-checklist.md)。
+
+在线文档站点发布后可通过 `https://goat.github.io/llm-sdk/` 访问，内容覆盖根文档、架构设计、发布检查与 Proxy 运维文档。
 
 ---
 
-## v0.3.0 新特性
+## v1.0.0 新特性
 
 ### 请求级缓存（Request-level Caching）
 
@@ -287,47 +303,37 @@ curl localhost:9090/metrics
 llm-sdk/
 ├── config/
 │   └── config.yaml          # 模型配置（提交 git）
-├── python/                  # Python SDK (v0.3.0)
+├── python/                  # Python SDK (v1.0.0)
 │   ├── __init__.py
-│   ├── client.py            # 核心 client + 缓存
-│   ├── cache.py             # 请求级缓存
-│   ├── tools.py             # Tool Use / Function Calling
-│   ├── errors.py            # 错误体系
-│   ├── session.py           # 多轮会话
-│   ├── structured.py        # 结构化输出
-│   ├── templates.py         # Prompt 模板
-│   └── tests/
-├── typescript/              # TypeScript SDK (v0.3.0)
-│   ├── index.ts
-│   ├── client.ts            # 核心 client + 缓存
-│   ├── cache.ts             # 请求级缓存
-│   ├── tools.ts             # Tool Use / Function Calling
-│   ├── errors.ts
-│   ├── session.ts
-│   ├── structured.ts
-│   ├── templates.ts
-│   └── tests/
-├── go/                      # Go SDK (v0.3.0)
-│   ├── client.go
-│   ├── cache.go             # 请求级缓存
-│   ├── tools.go             # Tool Use / Function Calling
-│   ├── errors.go
-│   ├── session.go
-│   ├── structured.go
-│   ├── templates.go
-│   └── client_test.go
-├── k8s/                     # Kubernetes Manifests (v0.3.0)
-│   ├── kustomization.yaml
-│   └── litellm/
-│       ├── servicemonitor.yaml  # Prometheus 监控
-│       └── ...
-├── prompts/                 # Prompt 模板文件
-├── tests/
-│   └── integration/         # 三语言统一集成测试 (v0.3.0)
+├── sdk/
+│   ├── python/
+│   │   ├── llm_sdk/         # Python SDK 包
+│   │   ├── tests/
+│   │   └── pyproject.toml
+│   ├── typescript/          # TypeScript SDK (v1.0.0)
+│   │   ├── index.ts
+│   │   ├── client.ts
+│   │   ├── structured.ts
+│   │   └── tests/
+│   ├── go/                  # Go SDK (v1.0.0)
+│   │   ├── client.go
+│   │   ├── structured.go
+│   │   └── client_test.go
+│   ├── prompts/             # 共享 Prompt 模板
+│   ├── examples/            # SDK 使用示例
+│   └── compat-tests/        # SDK 与 Proxy 的兼容性测试
+├── proxy/
+│   ├── config/
+│   │   └── config.yaml
+│   ├── k8s/
+│   │   ├── kustomization.yaml
+│   │   └── litellm/
+│   ├── tests/
+│   ├── .env.example
+│   └── start_proxy.py
 ├── docs/
 │   ├── llm-sdk-design.md
 │   └── llm-sdk-devplan.md
-├── CHANGELOG.md             # 版本变更记录 (v0.3.0)
-├── .env.example
+├── CHANGELOG.md             # 版本变更记录 (v1.0.0)
 └── .gitignore
 ```

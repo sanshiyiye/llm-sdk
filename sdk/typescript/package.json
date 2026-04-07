@@ -1,0 +1,58 @@
+{
+  "name": "@goat/llm-sdk",
+  "version": "1.0.0",
+  "description": "多语言 LLM 内部 SDK，通过 LiteLLM Proxy 统一调用各厂商模型",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:compat": "vitest run --config vitest.compat.config.ts",
+    "test:compat:types": "tsc -p ../compat-tests/tsconfig.json",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "openai": "^4.52.0",
+    "zod": "^3.23.0",
+    "zod-to-json-schema": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  },
+  "keywords": [
+    "llm",
+    "sdk",
+    "litellm",
+    "ai",
+    "proxy"
+  ],
+  "license": "MIT",
+  "homepage": "https://goat.github.io/llm-sdk/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/goat/llm-sdk.git",
+    "directory": "sdk/typescript"
+  },
+  "bugs": {
+    "url": "https://github.com/goat/llm-sdk/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

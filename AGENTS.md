@@ -15,14 +15,19 @@ Unified SDK providing identical interfaces across Python, TypeScript, and Go for
 
 ```
 llm-sdk/
-├── python/          # Python SDK (Pydantic-based)
-├── typescript/      # TypeScript SDK (Zod-based)
-├── go/              # Go SDK (stdlib only)
-├── config/          # LiteLLM Proxy configuration
-├── k8s/             # Kubernetes deployment manifests
-├── prompts/         # Shared prompt templates
+├── sdk/
+│   ├── python/      # Python SDK (Pydantic-based)
+│   ├── typescript/  # TypeScript SDK (Zod-based)
+│   ├── go/          # Go SDK (stdlib only)
+│   ├── prompts/     # Shared prompt templates
+│   ├── examples/    # SDK examples
+│   └── compat-tests/# SDK/Proxy compatibility tests
+├── proxy/
+│   ├── config/      # LiteLLM Proxy configuration
+│   ├── k8s/         # Kubernetes deployment manifests
+│   ├── .env.example # Environment template
+│   └── start_proxy.py
 ├── docs/            # Design documentation
-├── .env.example     # Environment template
 └── README.md        # Quick start guide
 ```
 
@@ -32,11 +37,11 @@ llm-sdk/
 
 | Task | Location | Notes |
 |------|----------|-------|
-| **Add SDK feature** | `python/`, `typescript/`, `go/` | Must implement in all 3 languages |
-| **Update model config** | `config/config.yaml` | LiteLLM Proxy model registry |
-| **Deploy to production** | `k8s/` | Kustomize + K8s manifests |
-| **Add prompt template** | `prompts/*.txt` | Shared across all languages |
-| **Environment setup** | `.env.example` | Copy to `.env`, fill API keys |
+| **Add SDK feature** | `sdk/python/`, `sdk/typescript/`, `sdk/go/` | Must implement in all 3 languages |
+| **Update model config** | `proxy/config/config.yaml` | LiteLLM Proxy model registry |
+| **Deploy to production** | `proxy/k8s/` | Kustomize + K8s manifests |
+| **Add prompt template** | `sdk/prompts/*.txt` | Shared across all languages |
+| **Environment setup** | `proxy/.env.example` | Copy to `proxy/.env`, fill API keys |
 | **Architecture docs** | `docs/llm-sdk-design.md` | System design decisions |
 
 ---
@@ -90,13 +95,13 @@ LLM_MODEL_VISION=auto-vision
 ### Testing
 ```bash
 # Python
-cd python && pytest tests/ -v
+cd sdk/python && pytest tests/ -v
 
 # TypeScript
-cd typescript && npm test
+cd sdk/typescript && npm test
 
 # Go
-cd go && go test ./... -v
+cd sdk/go && go test ./... -v
 ```
 
 ---
@@ -119,11 +124,11 @@ cd go && go test ./... -v
 ```bash
 # 1. Start LiteLLM Proxy
 pip install "litellm[proxy]"
-cp .env.example .env  # Fill in API keys
-litellm --config config/config.yaml --port 4000
+cp proxy/.env.example proxy/.env  # Fill in API keys
+python proxy/start_proxy.py
 
 # 2. Use SDK (Python example)
-cd python && pip install -e ".[dev]"
+cd sdk/python && pip install -e ".[dev]"
 python -c "from llm_sdk import client; print(client.chat('Hello'))"
 ```
 
@@ -134,5 +139,5 @@ python -c "from llm_sdk import client; print(client.chat('Hello'))"
 - Go SDK uses zero external dependencies (stdlib only)
 - Python SDK requires Pydantic v2
 - TypeScript SDK uses Zod for schema validation
-- All SDKs share the same `prompts/` directory for templates
+- All SDKs share the same `sdk/prompts/` directory for templates
 - K8s deployment uses Kustomize with HPA auto-scaling (2-6 replicas)

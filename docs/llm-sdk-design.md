@@ -199,9 +199,9 @@ general_settings:
 #### 启动方式
 
 ```bash
-# 开发环境（本地进程，读取 .env 中的 API Keys）
+# 开发环境（本地进程，读取 proxy/.env 中的 API Keys）
 pip install "litellm[proxy]"
-litellm --config config/config.yaml --port 4000
+python proxy/start_proxy.py
 
 # 生产环境：Kubernetes，见第六章
 ```
@@ -256,7 +256,7 @@ model_name 解析优先级（从高到低）：
 
 ```python
 # Python
-from llm_client import client
+from llm_sdk import client
 
 reply = client.chat("总结这篇文章")                        # 自动推断 chat
 reply = client.chat("快速回答", capability="fast")         # 手动指定
@@ -281,7 +281,7 @@ result = client.chat_structured("提取：iPhone 16 Pro 售价 7999", schema=Pro
 
 ```typescript
 // Node.js / TypeScript
-import { client } from './llm_client'
+import { client } from '@goat/llm-sdk'
 const reply  = await client.chat('总结这篇文章')
 const reply2 = await client.chat('快速回答', { capability: 'fast' })
 const reply3 = await client.chat('图里有什么', { imageUrl: 'https://...' })
@@ -357,7 +357,7 @@ LLM_MODEL_LOCAL=local-chat
 ### 4.3 .env.example（提交 git）
 
 ```bash
-# 复制为 .env 后填入真实值
+# 复制为 proxy/.env 后填入真实值
 ANTHROPIC_API_KEY=
 OPENAI_API_KEY=
 GEMINI_API_KEY=
@@ -382,42 +382,35 @@ LLM_MODEL_LOCAL=
 ```
 my-llm-sdk/
 │
-├── config/
-│   └── config.yaml              # 开发/生产共用模型定义（提交 git）
+├── sdk/
+│   ├── python/
+│   │   ├── llm_sdk/
+│   │   ├── tests/
+│   │   └── pyproject.toml
+│   ├── typescript/
+│   │   ├── index.ts
+│   │   ├── session.ts
+│   │   ├── structured.ts
+│   │   └── tests/
+│   ├── go/
+│   │   ├── client.go
+│   │   ├── session.go
+│   │   ├── structured.go
+│   │   └── client_test.go
+│   ├── prompts/
+│   ├── examples/
+│   └── compat-tests/
 │
-├── python/
-│   ├── llm_client.py            # 核心 client + tag 路由
-│   ├── session.py               # 多轮会话（阶段二）
-│   ├── structured.py            # 结构化输出（阶段二）
-│   ├── templates.py             # Prompt 模板管理（阶段二）
-│   └── tests/
-│       ├── test_client.py
-│       └── test_session.py
+├── proxy/
+│   ├── config/
+│   │   └── config.yaml          # Proxy 模型定义（提交 git）
+│   ├── k8s/
+│   │   ├── kustomization.yaml
+│   │   └── litellm/
+│   ├── .env.example             # Proxy 环境模板（提交 git）
+│   └── start_proxy.py
 │
-├── typescript/
-│   ├── llm_client.ts
-│   ├── session.ts               # 阶段二
-│   ├── structured.ts            # 阶段二
-│   └── tests/
-│       └── llm_client.test.ts
-│
-├── go/
-│   ├── llm_client.go
-│   ├── session.go               # 阶段二
-│   └── llm_client_test.go
-│
-├── k8s/
-│   ├── kustomization.yaml       # 统一入口
-│   └── litellm/
-│       ├── namespace.yaml
-│       ├── configmap.yaml       # 嵌入 config.yaml 内容（提交 git）
-│       ├── secret.yaml.example  # Secret 模板（提交 git，真实值不提交）
-│       ├── deployment.yaml
-│       ├── service.yaml
-│       └── hpa.yaml
-│
-├── .env.example                 # 开发环境变量模板（提交 git）
-├── .env                         # 真实密钥（.gitignore）
+├── proxy/.env                   # 真实密钥（.gitignore）
 ├── .gitignore
 └── README.md
 ```
@@ -425,8 +418,8 @@ my-llm-sdk/
 `.gitignore` 必须包含：
 
 ```
-.env
-k8s/litellm/secret.yaml
+proxy/.env
+proxy/k8s/litellm/secret.yaml
 ```
 
 ---
@@ -468,7 +461,7 @@ metadata:
 
 ### 6.3 configmap.yaml
 
-`config.yaml` 内容嵌入 ConfigMap，**改模型配置无需重建镜像**，触发滚动重启即可。内容与 `config/config.yaml` 保持一致，**生产版 fallback 链去掉 `local-chat`**。
+`config.yaml` 内容嵌入 ConfigMap，**改模型配置无需重建镜像**，触发滚动重启即可。内容与 `proxy/config/config.yaml` 保持一致，**生产版 fallback 链去掉 `local-chat`**。
 
 ```yaml
 apiVersion: v1
@@ -815,15 +808,15 @@ stringData:
 
 ```bash
 # 首次部署
-kubectl apply -k k8s/
+kubectl apply -k proxy/k8s/
 
 # 仅更新 config.yaml（改模型配置，无需重建镜像）
-kubectl apply -f k8s/litellm/configmap.yaml
+kubectl apply -f proxy/k8s/litellm/configmap.yaml
 kubectl rollout restart deployment/litellm-proxy -n llm-system
 kubectl rollout status deployment/litellm-proxy -n llm-system
 
 # 更新 LiteLLM 版本（改 deployment.yaml 的 image tag）
-kubectl apply -f k8s/litellm/deployment.yaml
+kubectl apply -f proxy/k8s/litellm/deployment.yaml
 kubectl rollout status deployment/litellm-proxy -n llm-system
 kubectl rollout undo deployment/litellm-proxy -n llm-system   # 回滚
 
@@ -900,4 +893,4 @@ Ollama 运行在开发者本机，不在 K8s 集群内。生产 K8s ConfigMap �
 `LLM_API_KEY` 是访问 Proxy 的凭证（与 `LITELLM_MASTER_KEY` 值相同），属于敏感信息。ConfigMap 不加密，`kubectl get configmap -o yaml` 可明文读取。非敏感的 `LLM_BASE_URL` 和 `LLM_MODEL_*` 放 ConfigMap，敏感的 `LLM_API_KEY` 放 Secret，职责分离。
 
 **config.yaml 和 K8s ConfigMap 如何保持同步？**
-两者内容基本相同，差异只有 fallback 链（生产去掉 `local-chat`）。推荐做法：CI 流水线中用脚本从 `config/config.yaml` 生成 K8s ConfigMap，自动应用差异，避免手动维护两份文件产生漂移。
+两者内容基本相同，差异只有 fallback 链（生产去掉 `local-chat`）。推荐做法：CI 流水线中用脚本从 `proxy/config/config.yaml` 生成 K8s ConfigMap，自动应用差异，避免手动维护两份文件产生漂移。

@@ -1,0 +1,92 @@
+name: docs
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+
+      - name: Build docs site
+        shell: bash
+        run: |
+          mkdir -p site/proxy
+          cat > site/index.md <<'EOF'
+          # LLM SDK 文档站点
+
+          多语言 LLM 内部 SDK，提供 Python、TypeScript、Go 三端统一接口，并通过 LiteLLM Proxy 接入 OpenAI、Anthropic、Gemini、Ollama 等模型。
+
+          ## 文档导航
+
+          - [架构设计](./design)
+          - [开发计划](./devplan)
+          - [发布检查清单](./release-checklist)
+          - [Proxy 部署](./proxy/deployment)
+          - [Proxy 监控](./proxy/monitoring)
+          - [Proxy 回滚](./proxy/rollback)
+          - [Proxy 升级](./proxy/upgrade)
+
+          ## 包信息
+
+          - Python: `llm-sdk`
+          - TypeScript: `@goat/llm-sdk`
+          - Go: `github.com/goat/llm-sdk/sdk/go`
+
+          ## 仓库入口
+
+          - GitHub: https://github.com/goat/llm-sdk
+          EOF
+          cp docs/llm-sdk-design.md site/design.md
+          cp docs/llm-sdk-devplan.md site/devplan.md
+          cp docs/release-checklist.md site/release-checklist.md
+          cp docs/remaining_product_plan.html site/remaining_product_plan.html
+          cp docs/k8s_deployment_architecture.svg site/k8s_deployment_architecture.svg
+          cp docs/proxy/*.md site/proxy/
+          cat > site/_config.yml <<'EOF'
+          title: LLM SDK
+          description: 多语言 LLM 内部 SDK 文档
+          baseurl: /llm-sdk
+          url: https://goat.github.io
+          theme: minima
+          markdown: kramdown
+          EOF
+
+      - name: Build Jekyll site
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: site
+          destination: _site
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

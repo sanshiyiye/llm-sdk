@@ -5,6 +5,30 @@ All notable changes to the LLM SDK project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-04-04
+
+### Added
+
+- Langfuse callback 配置与 PostgreSQL 审计日志入口
+- Proxy K8s NetworkPolicy 与 SealedSecret 模板
+- ConfigMap 生成脚本 `scripts/generate_k8s_configmap.py`
+- 统一 compat 验证脚本 `scripts/test_compat.py` 与 `scripts/test-compat.ps1`
+- GitHub Actions CI 与 release 工作流
+- Proxy 部署、监控、回滚、升级文档
+
+### Changed
+
+- Python 与 TypeScript 包版本提升到 1.0.0
+- TypeScript compat tests 增加独立类型检查入口
+- Proxy K8s ConfigMap 与源码配置保持同步
+
+### Fixed
+
+- 兼容测试入口分散、跨目录 TypeScript 文件编译报错
+- Proxy K8s Secret 模板缺少 SiliconFlow、Langfuse、DATABASE_URL 字段
+
+---
+
 ## [0.3.0] - 2026-03-31
 
 ### Added
@@ -34,10 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `litellm_request_duration_seconds` (latency histogram)
 
 - **Integration Test Suite** (All Languages)
-  - Created `tests/integration/` directory
-  - Python: `pytest tests/integration/test_python_sdk.py -v`
-  - TypeScript: `npx vitest run tests/integration/typescript-sdk.test.ts`
-  - Go: `go test ./tests/integration/...`
+  - Created `sdk/compat-tests/` directory
+  - Python: `pytest sdk/compat-tests/test_python_sdk.py -v`
+  - TypeScript: compat tests located in `sdk/compat-tests/typescript-sdk.test.ts`
+  - Go: compatibility coverage kept under `sdk/compat-tests/`
   - Test coverage:
     - Basic chat / embed / image_gen
     - Capability tag routing
@@ -108,4 +132,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial project setup
 - Architecture documentation
 - Development plan (Phase 1-4)
-- Project structure (python/, typescript/, go/, k8s/, config/)
+- Project structure (`sdk/`, `proxy/`)

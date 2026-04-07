@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "baseUrl": "../typescript",
+    "typeRoots": ["../typescript/node_modules/@types"],
+    "paths": {
+      "vitest": ["node_modules/vitest"],
+      "zod": ["node_modules/zod"],
+      "openai": ["node_modules/openai"]
+    }
+  },
+  "include": ["./typescript-sdk.test.ts"]
+}

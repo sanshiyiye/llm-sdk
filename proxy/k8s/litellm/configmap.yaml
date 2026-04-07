@@ -1,0 +1,141 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+  namespace: llm-system
+data:
+  config.yaml: |
+    model_list:
+      - model_name: auto-chat
+        litellm_params:
+          model: anthropic/claude-sonnet-4-5
+          api_key: os.environ/ANTHROPIC_API_KEY
+        model_info:
+          mode: chat
+          tags: [chat, auto]
+
+      - model_name: auto-vision
+        litellm_params:
+          model: anthropic/claude-opus-4-5
+          api_key: os.environ/ANTHROPIC_API_KEY
+        model_info:
+          mode: chat
+          supports_vision: true
+          tags: [vision, auto]
+
+      - model_name: gpt-chat
+        litellm_params:
+          model: openai/gpt-4o
+          api_key: os.environ/OPENAI_API_KEY
+        model_info:
+          mode: chat
+          tags: [chat, openai]
+
+      - model_name: gpt-vision
+        litellm_params:
+          model: openai/gpt-4o
+          api_key: os.environ/OPENAI_API_KEY
+        model_info:
+          mode: chat
+          supports_vision: true
+          tags: [vision, openai]
+
+      - model_name: text-embedding
+        litellm_params:
+          model: openai/text-embedding-3-small
+          api_key: os.environ/OPENAI_API_KEY
+        model_info:
+          mode: embedding
+          tags: [embedding]
+
+      - model_name: gpt-image-gen
+        litellm_params:
+          model: openai/dall-e-3
+          api_key: os.environ/OPENAI_API_KEY
+        model_info:
+          mode: image_generation
+          tags: [image-gen]
+
+      - model_name: gemini-chat
+        litellm_params:
+          model: gemini/gemini-2.0-flash
+          api_key: os.environ/GEMINI_API_KEY
+        model_info:
+          mode: chat
+          tags: [chat, fast, gemini]
+
+      - model_name: gemini-vision
+        litellm_params:
+          model: gemini/gemini-2.0-flash
+          api_key: os.environ/GEMINI_API_KEY
+        model_info:
+          mode: chat
+          supports_vision: true
+          supports_video: true
+          tags: [vision, video-input, gemini]
+
+      - model_name: gemini-image-gen
+        litellm_params:
+          model: gemini/nano-banana-2
+          api_key: os.environ/GEMINI_API_KEY
+        model_info:
+          mode: image_generation
+          tags: [image-gen, gemini]
+
+      - model_name: siliconflow-chat
+        litellm_params:
+          model: openai/Pro/zai-org/GLM-4.7
+          api_base: https://api.siliconflow.cn/v1
+          api_key: os.environ/SILICONFLOW_API_KEY
+        model_info:
+          mode: chat
+          tags: [chat, siliconflow]
+
+      - model_name: siliconflow-vision
+        litellm_params:
+          model: openai/Pro/zai-org/GLM-4.5V
+          api_base: https://api.siliconflow.cn/v1
+          api_key: os.environ/SILICONFLOW_API_KEY
+        model_info:
+          mode: chat
+          supports_vision: true
+          tags: [vision, siliconflow]
+
+      - model_name: siliconflow-reasoning
+        litellm_params:
+          model: openai/deepseek-ai/DeepSeek-R1
+          api_base: https://api.siliconflow.cn/v1
+          api_key: os.environ/SILICONFLOW_API_KEY
+        model_info:
+          mode: chat
+          tags: [reasoning, siliconflow]
+
+      - model_name: siliconflow-image-gen
+        litellm_params:
+          model: openai/Qwen/Qwen-Image
+          api_base: https://api.siliconflow.cn/v1
+          api_key: os.environ/SILICONFLOW_API_KEY
+        model_info:
+          mode: image_generation
+          tags: [image-gen, siliconflow]
+
+    router_settings:
+      routing_strategy: simple-shuffle
+      num_retries: 2
+      timeout: 300
+      retry_after: 3
+      fallbacks:
+        - auto-chat:   [gpt-chat]
+        - auto-vision: [gpt-vision]
+        - gemini-chat: [gpt-chat]
+
+    general_settings:
+      master_key: os.environ/LITELLM_MASTER_KEY
+      database_url: os.environ/DATABASE_URL
+      tpm_limit: 1000000
+      request_timeout: 300
+      default_fallbacks: [gpt-chat]
+
+    litellm_settings:
+      success_callback: ["langfuse"]
+      failure_callback: ["langfuse"]

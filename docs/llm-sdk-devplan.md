@@ -40,9 +40,9 @@
 #### 任务 2-1：结构化输出（`chat_structured`）
 
 **交付物：**
-- `python/structured.py`：接受 Pydantic BaseModel，返回强类型实例
-- `typescript/structured.ts`：接受 Zod schema，返回推断类型
-- `go/structured.go`：接受 struct 指针，通过反射生成 JSON Schema，解析结果
+- `sdk/python/llm_sdk/structured.py`：接受 Pydantic BaseModel，返回强类型实例
+- `sdk/typescript/structured.ts`：接受 Zod schema，返回推断类型
+- `sdk/go/structured.go`：接受 struct 指针，通过反射生成 JSON Schema，解析结果
 
 **接口契约：**
 ```python
@@ -69,9 +69,9 @@ err := c.ChatStructured(ctx, prompt, &result, nil)
 #### 任务 2-2：多轮会话 Session 对象
 
 **交付物：**
-- `python/session.py`
-- `typescript/session.ts`
-- `go/session.go`
+- `sdk/python/llm_sdk/session.py`
+- `sdk/typescript/session.ts`
+- `sdk/go/session.go`
 
 **接口契约：**
 ```python
@@ -135,15 +135,15 @@ for chunk := range stream {
 #### 任务 2-4：Prompt 模板管理器
 
 **交付物：**
-- `python/templates.py`
-- `typescript/templates.ts`
-- `go/templates.go`
-- `prompts/` 目录约定（`.txt` 模板文件）
+- `sdk/python/llm_sdk/templates.py`
+- `sdk/typescript/templates.ts`
+- `sdk/go/templates.go`
+- `sdk/prompts/` 目录约定（`.txt` 模板文件）
 
 **接口契约：**
 ```python
 # Python — 文件加载
-client.load_templates("prompts/")          # 扫描目录，注册所有 .txt
+client.load_templates("../prompts")        # 扫描目录，注册所有 .txt
 
 # 或代码注册
 client.register_template("code_review", """
@@ -279,9 +279,9 @@ spec:
 **运行方式：**
 ```bash
 # 需要本地 Proxy 在 localhost:4000 运行
-pytest python/tests/integration/
-npx vitest run typescript/tests/integration/
-go test ./go/... -tags integration
+pytest sdk/compat-tests/test_python_sdk.py -v
+npx vitest run sdk/typescript/tests/sdk.test.ts
+go test ./sdk/go/... -v
 ```
 
 ---
@@ -363,11 +363,11 @@ v1.0.0  阶段四核心（Langfuse + 审计日志）
 | 2-1 结构化输出 | `structured.py` | `structured.ts` | `structured.go` | — |
 | 2-2 Session | `session.py` | `session.ts` | `session.go` | — |
 | 2-3 流式 | `llm_client.py` | `llm_client.ts` | `llm_client.go` | — |
-| 2-4 模板 | `templates.py` | `templates.ts` | `templates.go` | `prompts/` |
+| 2-4 模板 | `templates.py` | `templates.ts` | `templates.go` | `sdk/prompts/` |
 | 2-5 错误处理 | `llm_client.py` | `llm_client.ts` | `llm_client.go` | — |
 | 3-1 缓存 | `llm_client.py` | `llm_client.ts` | — | — |
 | 3-2 Tool use | `llm_client.py` | `llm_client.ts` | `llm_client.go` | — |
-| 3-3 统计 | — | — | — | `k8s/litellm/` |
-| 3-4 集成测试 | `tests/integration/` | `tests/integration/` | `*_integration_test.go` | — |
-| 4-1 Langfuse | — | — | — | `config.yaml` + `secret` |
-| 4-2 审计日志 | — | — | — | `config.yaml` + `secret` + PG |
+| 3-3 统计 | — | — | — | `proxy/k8s/litellm/` |
+| 3-4 集成测试 | `sdk/compat-tests/` | `sdk/compat-tests/` | `sdk/compat-tests/` | — |
+| 4-1 Langfuse | — | — | — | `proxy/config/config.yaml` + `secret` |
+| 4-2 审计日志 | — | — | — | `proxy/config/config.yaml` + `secret` + PG |

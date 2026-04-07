@@ -8,7 +8,7 @@
 
 ### 1. 配置环境变量
 
-编辑 `.env` 文件，填入你的真实 API 密钥：
+编辑 `proxy/.env` 文件，填入你的真实 API 密钥：
 
 ```bash
 # LiteLLM Proxy 主密钥（必填 - 设置任意字符串作为你的主密钥）
@@ -32,14 +32,14 @@ python test_env_setup.py
 ### 3. 启动服务
 
 ```bash
-python start_proxy.py
+python proxy/start_proxy.py
 ```
 
 ## 🔧 技术实现
 
 ### 环境变量加载机制
 
-`start_proxy.py` 已实现以下功能：
+`proxy/start_proxy.py` 已实现以下功能：
 
 1. **自动加载 `.env` 文件**：使用 `python-dotenv` 库
 2. **优先级设置**：系统环境变量 > `.env` 文件 > 默认值
@@ -93,9 +93,9 @@ openai_api_key = os.getenv("OPENAI_API_KEY") or "sk-your-openai-key-here"
 
 ## 📚 相关文件
 
-- `.env` - 本地环境变量文件（不提交）
-- `.env.example` - 环境变量模板
-- `start_proxy.py` - 环境变量加载实现
+- `proxy/.env` - 本地环境变量文件（不提交）
+- `proxy/.env.example` - 环境变量模板
+- `proxy/start_proxy.py` - 环境变量加载实现
 - `test_env_setup.py` - 环境变量测试脚本
 - `.gitignore` - Git 忽略配置
 

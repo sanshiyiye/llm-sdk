@@ -1,8 +1,8 @@
 # 环境变量和秘钥
 .env
 .env.*
-!.env.example
-k8s/litellm/secret.yaml
+!proxy/.env.example
+proxy/k8s/litellm/secret.yaml
 litellm.db
 
 # Python
