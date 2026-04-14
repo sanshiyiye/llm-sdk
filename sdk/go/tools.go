@@ -238,20 +238,16 @@ func (c *Client) ChatWithTools(ctx context.Context, prompt string, tool Tool, op
 			} `json:"choices"`
 		}
 
-		err := c.withRetry(ctx, func() error {
-			resp, err := c.postJSON(ctx, "/v1/chat/completions", body)
-			if err != nil {
-				return err
-			}
-			defer resp.Body.Close()
-
-			raw, _ := io.ReadAll(resp.Body)
-			if resp.StatusCode >= 400 {
-				return classifyError(resp.StatusCode, string(raw))
-			}
-			return json.Unmarshal(raw, &respData)
-		})
+		resp, err := c.postJSON(ctx, "/v1/chat/completions", body)
 		if err != nil {
+			return err
+		}
+		raw, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			return classifyError(resp.StatusCode, string(raw))
+		}
+		if err := json.Unmarshal(raw, &respData); err != nil {
 			return err
 		}
 

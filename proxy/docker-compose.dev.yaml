@@ -15,12 +15,12 @@ services:
     ports:
       - "4000:4000"
     volumes:
-      - ./config/config.yaml:/app/config.yaml:ro
-    env_file:
-      - .env
+      - ./config/config.dev.yaml:/app/config.yaml:ro
     environment:
-      # 读取 .env 中的 LITELLM_MASTER_KEY；未设置时使用开发默认值
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-local-dev}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-}
     command: ["--config", "/app/config.yaml", "--port", "4000", "--detailed_debug"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4000/health/readiness"]

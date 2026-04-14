@@ -11,10 +11,7 @@
  */
 
 import OpenAI from 'openai'
-import {
-  AuthError, LLMError, ModelError, NetworkError,
-  ProxyError, RateLimitError, TimeoutError, classifyError,
-} from './errors'
+import { LLMError, classifyError } from './errors'
 import { Session } from './session'
 import type { ZodType, ZodInfer } from './structured'
 import { createCache, buildCacheKey } from './cache'
@@ -63,38 +60,6 @@ export interface ChatOptions {
 export interface EmbedOptions { model?: string }
 export interface ImageGenOptions { size?: string; model?: string }
 
-// ── 重试工具 ─────────────────────────────────────────────────────────────────
-
-const RETRY_STATUSES = new Set([500, 502, 503, 504])
-const NO_RETRY_STATUSES = new Set([400, 401, 403, 422])
-
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  maxRetries = 2,
-  baseDelay = 1000,
-): Promise<T> {
-  let lastErr: unknown
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn()
-    } catch (e) {
-      if (e instanceof AuthError || e instanceof ModelError) throw e
-      if (e instanceof RateLimitError) {
-        lastErr = e
-        if (attempt < maxRetries) await sleep(e.retryAfter * 1000)
-      } else if (e instanceof ProxyError || e instanceof TimeoutError || e instanceof NetworkError) {
-        lastErr = e
-        if (attempt < maxRetries) await sleep(baseDelay * 2 ** attempt)
-      } else {
-        throw new NetworkError(String(e))
-      }
-    }
-  }
-  throw lastErr
-}
-
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
-
 function wrapOpenAIError(e: unknown): LLMError {
   const status = (e as any)?.status ?? 0
   return classifyError(status, String(e))
@@ -105,21 +70,21 @@ function wrapOpenAIError(e: unknown): LLMError {
 export interface LLMClientOptions {
   baseURL?: string
   apiKey?: string
-  maxRetries?: number
   cache?: CacheOptions
 }
 
+/**
+ * LLM SDK client. Retries are handled by the LiteLLM Proxy; the SDK does not retry.
+ */
 export class LLMClient {
-  private openai: OpenAI
-  private maxRetries: number
+  public readonly rawClient: OpenAI
   private cache: CacheBackend | null
 
   constructor(options: LLMClientOptions = {}) {
     const baseURL = options.baseURL ?? process.env.LLM_BASE_URL ?? 'http://localhost:4000'
     const apiKey = options.apiKey ?? process.env.LLM_API_KEY ?? 'no-key'
-    this.maxRetries = options.maxRetries ?? 2
     this.cache = createCache(options.cache ?? false)
-    this.openai = new OpenAI({ 
+    this.rawClient = new OpenAI({ 
       baseURL, 
       apiKey, 
       maxRetries: 0,
@@ -175,17 +140,16 @@ export class LLMClient {
     }
 
     // Make API call
-    const result = await withRetry(async () => {
-      try {
-        const resp = await this.openai.chat.completions.create({
-          model,
-          messages,
-          ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
-          ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
-        })
-        return resp.choices[0]?.message?.content || ''
-      } catch (e) { throw wrapOpenAIError(e) }
-    }, this.maxRetries)
+    let result: string
+    try {
+      const resp = await this.rawClient.chat.completions.create({
+        model,
+        messages,
+        ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
+        ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
+      })
+      result = resp.choices[0]?.message?.content || ''
+    } catch (e) { throw wrapOpenAIError(e) }
 
     // Store in cache
     if (useCache && this.cache) {
@@ -203,7 +167,7 @@ export class LLMClient {
     const model = this.resolveModel('chat', hasImage, opts)
     const messages = this.buildMessages(prompt, opts)
     try {
-      const stream = await this.openai.chat.completions.create({
+      const stream = await this.rawClient.chat.completions.create({
         model, messages, stream: true,
       })
       for await (const chunk of stream) {
@@ -219,13 +183,11 @@ export class LLMClient {
   async embed(text: string[], opts?: EmbedOptions): Promise<number[][]>
   async embed(text: string | string[], opts: EmbedOptions = {}): Promise<number[] | number[][]> {
     const model = opts.model ?? resolveModel('embedding')
-    return withRetry(async () => {
-      try {
-        const resp = await this.openai.embeddings.create({ model, input: text })
-        if (typeof text === 'string') return resp.data[0].embedding
-        return resp.data.map(d => d.embedding)
-      } catch (e) { throw wrapOpenAIError(e) }
-    }, this.maxRetries)
+    try {
+      const resp = await this.rawClient.embeddings.create({ model, input: text })
+      if (typeof text === 'string') return resp.data[0].embedding
+      return resp.data.map(d => d.embedding)
+    } catch (e) { throw wrapOpenAIError(e) }
   }
 
   // ── image gen ────────────────────────────────────────────────────────────
@@ -233,14 +195,12 @@ export class LLMClient {
   async imageGen(prompt: string, opts: ImageGenOptions = {}): Promise<string> {
     const { size = '1024x1024', model: explicitModel } = opts
     const model = explicitModel ?? resolveModel('image-gen')
-    return withRetry(async () => {
-      try {
-        const resp = await this.openai.images.generate({
-          model, prompt, size: size as OpenAI.ImageGenerateParams['size'],
-        })
-        return resp.data?.[0]?.url || ''
-      } catch (e) { throw wrapOpenAIError(e) }
-    }, this.maxRetries)
+    try {
+      const resp = await this.rawClient.images.generate({
+        model, prompt, size: size as OpenAI.ImageGenerateParams['size'],
+      })
+      return resp.data?.[0]?.url || ''
+    } catch (e) { throw wrapOpenAIError(e) }
   }
 
   // ── session ──────────────────────────────────────────────────────────────
@@ -282,8 +242,8 @@ export class LLMClient {
    * if (!result.ok) throw new Error('LLM SDK 配置异常')
    */
   async doctor(): Promise<DoctorResult> {
-    const baseURL = (this.openai as any).baseURL ?? process.env.LLM_BASE_URL ?? 'http://localhost:4000'
-    const apiKey = (this.openai as any).apiKey ?? process.env.LLM_API_KEY ?? 'no-key'
+    const baseURL = (this.rawClient as any).baseURL ?? process.env.LLM_BASE_URL ?? 'http://localhost:4000'
+    const apiKey = (this.rawClient as any).apiKey ?? process.env.LLM_API_KEY ?? 'no-key'
     return runDoctor(baseURL, apiKey, TAG_MODEL_MAP)
   }
 }

@@ -16,7 +16,6 @@ from __future__ import annotations
 import base64
 import json
 import os
-import time
 from pathlib import Path
 from typing import AsyncIterator, Iterator
 
@@ -46,9 +45,6 @@ TAG_MODEL_MAP: dict[str, str] = {
     "local":       os.getenv("LLM_MODEL_LOCAL", "")       or "local-chat",
 }
 
-_RETRY_STATUSES = {500, 502, 503, 504}
-_NO_RETRY_STATUSES = {400, 401, 403, 422}
-
 
 def _resolve_model(capability: str) -> str:
     model = TAG_MODEL_MAP.get(capability)
@@ -66,55 +62,34 @@ def _classify_error(status: int, body: str) -> LLMError:
         return RateLimitError(raw=body)
     if status in (400, 422):
         return ModelError(f"模型拒绝请求 (HTTP {status})", status_code=status, raw=body)
-    if status in _RETRY_STATUSES:
+    if status in {500, 502, 503, 504}:
         return ProxyError(f"Proxy 错误 (HTTP {status})", status_code=status, raw=body)
     return LLMError(f"HTTP {status}", status_code=status, raw=body)
-
-
-def _with_retry(fn, max_retries: int = 2, base_delay: float = 1.0):
-    """通用重试包装，指数退避，不可恢复错误立即抛出"""
-    last_err = None
-    for attempt in range(max_retries + 1):
-        try:
-            return fn()
-        except (AuthError, ModelError):
-            raise  # 不重试
-        except RateLimitError as e:
-            last_err = e
-            if attempt < max_retries:
-                time.sleep(e.retry_after)
-        except (TimeoutError, ProxyError, NetworkError) as e:
-            last_err = e
-            if attempt < max_retries:
-                time.sleep(base_delay * (2**attempt))
-        except Exception as e:
-            raise NetworkError(str(e)) from e
-    raise last_err
 
 
 # ── 主客户端 ─────────────────────────────────────────────────────────────────
 
 
 class LLMClient:
+    # 重试由 LiteLLM Proxy 处理，SDK 不做重试
     def __init__(
         self,
         base_url: str | None = None,
         api_key: str | None = None,
-        max_retries: int = 2,
         timeout: float = 60.0,
         cache: dict | bool | None = None,
     ):
         self._base_url = base_url or os.getenv("LLM_BASE_URL", "http://localhost:4000")
         self._api_key = api_key or os.getenv("LLM_API_KEY", "no-key")
-        self._max_retries = max_retries
         self._timeout = timeout
         self._cache = create_cache(cache)
         self._openai = openai.OpenAI(
             base_url=self._base_url,
             api_key=self._api_key,
-            max_retries=0,  # 重试由 SDK 层统一控制
+            max_retries=0,
             timeout=timeout,
         )
+        self.raw_client = self._openai
 
     # ── 内部工具 ─────────────────────────────────────────────────────────────
 
@@ -158,18 +133,13 @@ class LLMClient:
         return _resolve_model(cap)
 
     def _call_chat(self, model: str, messages: list[dict], **kwargs) -> str:
-        def _do():
-            try:
-                resp = self._openai.chat.completions.create(
-                    model=model, messages=messages, **kwargs
-                )
-                return resp.choices[0].message.content or ""
-            except Exception as e:
-                raw = str(e)
-                code = getattr(e, "status_code", 0)
-                raise _classify_error(code, raw) from e
-
-        return _with_retry(_do, self._max_retries)
+        try:
+            resp = self._openai.chat.completions.create(
+                model=model, messages=messages, **kwargs
+            )
+            return resp.choices[0].message.content or ""
+        except Exception as e:
+            raise _classify_error(getattr(e, "status_code", 0), str(e)) from e
 
     # ── 公开接口 ─────────────────────────────────────────────────────────────
 
@@ -245,17 +215,13 @@ class LLMClient:
     ) -> list[float] | list[list[float]]:
         """文本向量化"""
         resolved = model or _resolve_model("embedding")
-
-        def _do():
-            try:
-                resp = self._openai.embeddings.create(model=resolved, input=text)
-                if isinstance(text, str):
-                    return resp.data[0].embedding
-                return [d.embedding for d in resp.data]
-            except Exception as e:
-                raise _classify_error(getattr(e, "status_code", 0), str(e)) from e
-
-        return _with_retry(_do, self._max_retries)
+        try:
+            resp = self._openai.embeddings.create(model=resolved, input=text)
+            if isinstance(text, str):
+                return resp.data[0].embedding
+            return [d.embedding for d in resp.data]
+        except Exception as e:
+            raise _classify_error(getattr(e, "status_code", 0), str(e)) from e
 
     def image_gen(
         self,
@@ -267,17 +233,13 @@ class LLMClient:
     ) -> str:
         """图像生成，返回 URL"""
         resolved = model or _resolve_model("image-gen")
-
-        def _do():
-            try:
-                resp = self._openai.images.generate(
-                    model=resolved, prompt=prompt, size=size, **kwargs
-                )
-                return resp.data[0].url or ""
-            except Exception as e:
-                raise _classify_error(getattr(e, "status_code", 0), str(e)) from e
-
-        return _with_retry(_do, self._max_retries)
+        try:
+            resp = self._openai.images.generate(
+                model=resolved, prompt=prompt, size=size, **kwargs
+            )
+            return resp.data[0].url or ""
+        except Exception as e:
+            raise _classify_error(getattr(e, "status_code", 0), str(e)) from e
 
     def session(self, system: str | None = None) -> "Session":
         """创建多轮会话对象"""

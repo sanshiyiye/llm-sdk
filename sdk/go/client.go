@@ -1,6 +1,8 @@
 // Package llmclient provides a unified LLM client that routes
 // requests through a LiteLLM Proxy using capability tags.
 //
+// Retries are handled by the LiteLLM Proxy; the SDK does not retry.
+//
 // Usage:
 //
 //	c := llmclient.New()
@@ -18,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"os"
 	"strings"
@@ -48,12 +49,11 @@ func envOr(key, fallback string) string {
 
 // Client is the main LLM SDK client.
 type Client struct {
-	BaseURL    string
-	APIKey     string
-	TagMap     map[string]string
-	MaxRetries int
-	HTTP       *http.Client
-	Cache      CacheBackend
+	BaseURL string
+	APIKey  string
+	TagMap  map[string]string
+	HTTP    *http.Client
+	Cache   CacheBackend
 }
 
 // New creates a Client configured from environment variables.
@@ -70,8 +70,7 @@ func New() *Client {
 			"fast":        envOr("LLM_MODEL_FAST", defaultTagMap["fast"]),
 			"local":       envOr("LLM_MODEL_LOCAL", defaultTagMap["local"]),
 		},
-		MaxRetries: 2,
-		HTTP:       &http.Client{Timeout: 60 * time.Second},
+		HTTP:  &http.Client{Timeout: 60 * time.Second},
 		Cache:      NewTTLCache(1000, time.Hour),
 	}
 }
@@ -142,44 +141,40 @@ func (c *Client) Chat(ctx context.Context, prompt string, opts *ChatOpts) (strin
 		}
 	}
 
-	var result string
-	err = c.withRetry(ctx, func() error {
-		resp, err := c.postJSON(ctx, "/v1/chat/completions", body)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-		raw, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode >= 400 {
-			return classifyError(resp.StatusCode, string(raw))
-		}
-		var out struct {
-			Choices []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			} `json:"choices"`
-			Error *struct{ Message string `json:"message"` } `json:"error"`
-		}
-		if err := json.Unmarshal(raw, &out); err != nil {
-			return &NetworkError{LLMError{Message: "failed to decode response: " + err.Error()}}
-		}
-		if out.Error != nil {
-			return &ModelError{LLMError{Message: out.Error.Message}}
-		}
-		if len(out.Choices) == 0 {
-			return &ProxyError{LLMError{Message: "empty response from proxy"}}
-		}
-		result = out.Choices[0].Message.Content
-		return nil
-	})
-	if err == nil && useCache {
+	resp, err := c.postJSON(ctx, "/v1/chat/completions", body)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return "", classifyError(resp.StatusCode, string(raw))
+	}
+	var out struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Error *struct{ Message string `json:"message"` } `json:"error"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return "", &NetworkError{LLMError{Message: "failed to decode response: " + err.Error()}}
+	}
+	if out.Error != nil {
+		return "", &ModelError{LLMError{Message: out.Error.Message}}
+	}
+	if len(out.Choices) == 0 {
+		return "", &ProxyError{LLMError{Message: "empty response from proxy"}}
+	}
+	result := out.Choices[0].Message.Content
+	if useCache {
 		cacheKey := BuildCacheKey(model, messages)
 		if cacheKey != "" {
 			c.Cache.Set(cacheKey, result, 0)
 		}
 	}
-	return result, err
+	return result, nil
 }
 
 // ── ChatStream ────────────────────────────────────────────────────────────────
@@ -278,34 +273,29 @@ func (c *Client) Embed(ctx context.Context, text string, opts *EmbedOpts) ([]flo
 	}
 
 	body := map[string]any{"model": model, "input": text}
-	var result []float64
-	err := c.withRetry(ctx, func() error {
-		resp, err := c.postJSON(ctx, "/v1/embeddings", body)
-		if err != nil {
-			return &NetworkError{LLMError{Message: err.Error()}}
-		}
-		defer resp.Body.Close()
-		raw, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode >= 400 {
-			return classifyError(resp.StatusCode, string(raw))
-		}
-		var out struct {
-			Data  []struct{ Embedding []float64 `json:"embedding"` } `json:"data"`
-			Error *struct{ Message string `json:"message"` }        `json:"error"`
-		}
-		if err := json.Unmarshal(raw, &out); err != nil {
-			return &NetworkError{LLMError{Message: err.Error()}}
-		}
-		if out.Error != nil {
-			return &ModelError{LLMError{Message: out.Error.Message}}
-		}
-		if len(out.Data) == 0 {
-			return &ProxyError{LLMError{Message: "empty embedding response"}}
-		}
-		result = out.Data[0].Embedding
-		return nil
-	})
-	return result, err
+	resp, err := c.postJSON(ctx, "/v1/embeddings", body)
+	if err != nil {
+		return nil, &NetworkError{LLMError{Message: err.Error()}}
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return nil, classifyError(resp.StatusCode, string(raw))
+	}
+	var out struct {
+		Data  []struct{ Embedding []float64 `json:"embedding"` } `json:"data"`
+		Error *struct{ Message string `json:"message"` }        `json:"error"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, &NetworkError{LLMError{Message: err.Error()}}
+	}
+	if out.Error != nil {
+		return nil, &ModelError{LLMError{Message: out.Error.Message}}
+	}
+	if len(out.Data) == 0 {
+		return nil, &ProxyError{LLMError{Message: "empty embedding response"}}
+	}
+	return out.Data[0].Embedding, nil
 }
 
 // ── Session ───────────────────────────────────────────────────────────────────
@@ -379,28 +369,3 @@ func (c *Client) postJSON(ctx context.Context, path string, body map[string]any)
 	return c.HTTP.Do(req)
 }
 
-func (c *Client) withRetry(ctx context.Context, fn func() error) error {
-	var lastErr error
-	for attempt := 0; attempt <= c.MaxRetries; attempt++ {
-		err := fn()
-		if err == nil {
-			return nil
-		}
-		if !isRetryable(err) {
-			return err
-		}
-		lastErr = err
-		if attempt < c.MaxRetries {
-			delay := time.Duration(math.Pow(2, float64(attempt))) * time.Second
-			if rl, ok := err.(*RateLimitError); ok {
-				delay = time.Duration(rl.RetryAfter * float64(time.Second))
-			}
-			select {
-			case <-time.After(delay):
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-	}
-	return lastErr
-}

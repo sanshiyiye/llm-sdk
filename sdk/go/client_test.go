@@ -20,7 +20,7 @@ func newTestServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, *l
 	c := llmclient.New()
 	c.BaseURL = srv.URL
 	c.APIKey = "test-key"
-	c.MaxRetries = 0
+
 	return srv, c
 }
 
@@ -348,31 +348,22 @@ func TestTemplateRegistry_LoadDir(t *testing.T) {
 
 // ── Errors ────────────────────────────────────────────────────────────────────
 
-func TestErrors_RetryOnProxyError(t *testing.T) {
+func TestErrors_ProxyErrorReturnsError(t *testing.T) {
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
-		if calls < 2 {
-			w.WriteHeader(500)
-			w.Write([]byte(`{"error":{"message":"internal"}}`))
-			return
-		}
-		chatHandler("ok")(w, r)
+		w.WriteHeader(500)
+		w.Write([]byte(`{"error":{"message":"internal"}}`))
 	}))
 	defer srv.Close()
 	c := llmclient.New()
 	c.BaseURL = srv.URL
-	c.MaxRetries = 2
-	// Disable actual sleep in test
-	reply, err := c.Chat(context.Background(), "hi", nil)
-	if err != nil {
-		t.Fatalf("expected success after retry, got: %v", err)
+	_, err := c.Chat(context.Background(), "hi", nil)
+	if err == nil {
+		t.Fatal("expected error on proxy 500, got nil")
 	}
-	if reply != "ok" {
-		t.Errorf("expected 'ok', got %q", reply)
-	}
-	if calls != 2 {
-		t.Errorf("expected 2 calls, got %d", calls)
+	if calls != 1 {
+		t.Errorf("expected exactly 1 call (no SDK retry), got %d", calls)
 	}
 }
 
@@ -383,13 +374,12 @@ func TestErrors_NoRetryOnAuthError(t *testing.T) {
 		w.WriteHeader(401)
 		w.Write([]byte(`{"error":{"message":"unauthorized"}}`))
 	})
-	c.MaxRetries = 2
 	_, err := c.Chat(context.Background(), "hi", nil)
 	if err == nil {
 		t.Error("expected error, got nil")
 	}
 	if calls != 1 {
-		t.Errorf("expected 1 call (no retry), got %d", calls)
+		t.Errorf("expected 1 call, got %d", calls)
 	}
 }
 

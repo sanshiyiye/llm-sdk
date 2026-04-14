@@ -1,6 +1,22 @@
 # LLM SDK
 
-三分钟接入多语言 LLM，Python / TypeScript / Go 统一接口。
+**企业 LLM 接入的 DX 层 + 治理适配器。** Python / TypeScript / Go 统一接口，2 个环境变量完成接入。
+
+> 这不是对 LiteLLM 的重复封装——LiteLLM Proxy 是 Python-only，Go / TypeScript 原生 SDK 由本项目独立提供。
+
+---
+
+## 为什么需要这个 SDK？
+
+| 能力 | 说明 |
+|------|------|
+| **Go / TS 原生 SDK** | LiteLLM 官方只有 Python 客户端，本项目为 Go / TypeScript 提供同等能力 |
+| **Capability Tag 治理** | 业务代码写 `capability="chat"`，平台团队可在 Proxy 侧无感替换底层模型，业务零改动 |
+| **语言原生类型安全** | Python 返回 Pydantic 模型、TypeScript 用 Zod 校验、Go 用 struct——不再手写 JSON Schema |
+| **`doctor()` 自诊断** | 一条命令定位配置 / 网络 / 鉴权问题，LiteLLM 无对等工具 |
+| **极简 onboarding** | 只需 2 个环境变量，无需了解 LiteLLM 内部配置 |
+
+**重试、fallback、速率限制**由 LiteLLM Proxy 统一处理，SDK 本身不做重试，保持逻辑清晰。
 
 ---
 
@@ -154,6 +170,8 @@ url = client.image_gen("a cat on the moon")
 ---
 
 ## Capability Tag 体系
+
+**为什么用 tag 而不是模型名？** 这是治理设计的核心：业务代码与具体模型完全解耦，平台团队可在 Proxy 侧随时切换底层模型（降本、灰度、应急替换），所有业务代码零改动。
 
 业务代码用 tag，不写死模型名。Proxy 侧负责模型路由，业务侧无需关心背后用哪个模型：
 

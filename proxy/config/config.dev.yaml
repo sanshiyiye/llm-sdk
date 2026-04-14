@@ -1,0 +1,53 @@
+# LiteLLM Configuration for Novel Platform
+#
+# This config file defines the model routing for different capability levels:
+# - creative: High-capability model for creative writing (e.g., Claude 3 Sonnet)
+# - analytical: Balanced model for analysis/structured work (e.g., GPT-4o Mini)
+# - fast: Fast low-cost model for quick tasks (e.g., DeepSeek Chat, GPT-3.5-turbo)
+
+model_list:
+  # Creative writing model - best for storytelling, prose generation
+  - model_name: claude-opus-4-6
+    litellm_params:
+      model: anthropic/claude-opus-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+      api_base: https://api.nagara.top
+      temperature: 0.9
+      max_tokens: 4096
+
+  # Analytical model - good for structured analysis, theme development
+  # Uncomment and set OPENAI_API_KEY to enable
+  # - model_name: gpt-4o-mini
+  #   litellm_params:
+  #     model: openai/gpt-4o-mini
+  #     api_key: os.environ/OPENAI_API_KEY
+  #     temperature: 0.7
+  #     max_tokens: 2048
+
+  # Fast model - quick responses for simple tasks
+  # Uncomment and set DEEPSEEK_API_KEY to enable
+  # - model_name: deepseek-chat
+  #   litellm_params:
+  #     model: deepseek/deepseek-chat
+  #     api_key: os.environ/DEEPSEEK_API_KEY
+  #     temperature: 0.8
+  #     max_tokens: 2048
+
+  # Optional: OpenAI GPT-3.5-turbo as fallback for fast model
+  # - model_name: gpt-3.5-turbo
+  #   litellm_params:
+  #     model: openai/gpt-3.5-turbo
+  #     api_key: os.environ/OPENAI_API_KEY
+  #     temperature: 0.8
+  #     max_tokens: 2048
+
+  # Optional: Local Ollama model (uncomment if you want to use local LLM)
+  # - model_name: ollama-mistral
+  #   litellm_params:
+  #     model: ollama/mistral
+  #     api_base: http://localhost:11434
+  #     temperature: 0.8
+  #     max_tokens: 2048
+
+general_settings:
+  default_timeout: 60

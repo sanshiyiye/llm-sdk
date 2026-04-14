@@ -66,15 +66,3 @@ func classifyError(status int, body string) error {
 		return &LLMError{Message: base.Message, StatusCode: status, Raw: body}
 	}
 }
-
-// isRetryable returns true if the error warrants a retry attempt.
-func isRetryable(err error) bool {
-	switch err.(type) {
-	case *AuthError, *ModelError:
-		return false
-	case *RateLimitError, *ProxyError, *TimeoutError, *NetworkError:
-		return true
-	default:
-		return false
-	}
-}

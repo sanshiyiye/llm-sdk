@@ -222,7 +222,7 @@ class ChatWithToolsMixin:
         Returns:
             str: 最终回复
         """
-        from .client import _classify_error, _with_retry
+        from .client import _classify_error
 
         tool_map: dict[str, ToolDefinition] = {}
         for func in tools:
@@ -239,19 +239,16 @@ class ChatWithToolsMixin:
         tool_schemas = [tool_def.to_openai_schema() for tool_def in tool_map.values()]
 
         for _ in range(max_tool_calls):
-            def _do():
-                try:
-                    return self._openai.chat.completions.create(
-                        model=resolved,
-                        messages=messages,
-                        tools=tool_schemas,
-                        tool_choice="auto",
-                        **kwargs,
-                    )
-                except Exception as e:
-                    raise _classify_error(getattr(e, "status_code", 0), str(e)) from e
-
-            response = _with_retry(_do, self._max_retries)
+            try:
+                response = self._openai.chat.completions.create(
+                    model=resolved,
+                    messages=messages,
+                    tools=tool_schemas,
+                    tool_choice="auto",
+                    **kwargs,
+                )
+            except Exception as e:
+                raise _classify_error(getattr(e, "status_code", 0), str(e)) from e
             message = response.choices[0].message
             content = message.content or ""
             tool_calls = ChatWithToolsMixin._extract_tool_calls(
