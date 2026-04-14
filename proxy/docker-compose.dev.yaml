@@ -1,0 +1,31 @@
+# LiteLLM Proxy 本地开发一键启动
+# ================================
+# 用法：
+#   cp proxy/.env.example proxy/.env   # 填入至少一个 Provider API Key
+#   docker compose -f proxy/docker-compose.dev.yaml up -d
+#   curl http://localhost:4000/health/readiness
+#
+# 停止：
+#   docker compose -f proxy/docker-compose.dev.yaml down
+
+services:
+  litellm-proxy:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: llm-sdk-proxy-dev
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./config/config.yaml:/app/config.yaml:ro
+    env_file:
+      - .env
+    environment:
+      # 读取 .env 中的 LITELLM_MASTER_KEY；未设置时使用开发默认值
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-local-dev}
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--detailed_debug"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
