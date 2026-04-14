@@ -52,9 +52,10 @@ llm-sdk/
 │   └── compat-tests/# SDK/Proxy compatibility tests
 ├── proxy/
 │   ├── config/      # LiteLLM Proxy configuration
-│   ├── k8s/         # Kubernetes deployment manifests
+│   ├── docker-compose.yaml      # Production deployment (Linux server)
 │   ├── docker-compose.dev.yaml  # Local dev one-command startup
-│   ├── .env.example # Environment template
+│   ├── .env.prod.example        # Production environment template
+│   ├── .env.example # Local dev environment template
 │   └── start_proxy.py
 ├── starters/        # Per-language starter templates for new projects
 │   ├── python/
@@ -72,7 +73,7 @@ llm-sdk/
 |------|----------|-------|
 | **Add SDK feature** | `sdk/python/`, `sdk/typescript/`, `sdk/go/` | Must implement in all 3 languages |
 | **Update model config** | `proxy/config/config.yaml` | LiteLLM Proxy model registry |
-| **Deploy to production** | `proxy/k8s/` | Kustomize + K8s manifests |
+| **Deploy to production** | `proxy/docker-compose.yaml` | Linux server, see `docs/deploy-linux.md` |
 | **Add prompt template** | `sdk/prompts/*.txt` | Shared across all languages |
 | **Environment setup** | `proxy/.env.example` | Copy to `proxy/.env`, fill API keys |
 | **Architecture docs** | `docs/llm-sdk-design.md` | System design decisions |
@@ -171,7 +172,7 @@ LLM_MODEL_LOCAL=local-chat
 
 | Concern | Owner | Where |
 |---------|-------|-------|
-| Provider API keys | Platform team | LiteLLM Proxy env / K8s Secret |
+| Provider API keys | Platform team | LiteLLM Proxy `.env.prod` |
 | Model routing & fallback | Platform team | `proxy/config/config.yaml` |
 | Rate limiting & quotas | Platform team | LiteLLM Proxy config |
 | Audit logging | Platform team | PostgreSQL / Langfuse |
@@ -258,5 +259,5 @@ result.print()
 - Python SDK requires Pydantic v2
 - TypeScript SDK uses Zod for schema validation
 - All SDKs share the same `sdk/prompts/` directory for templates
-- K8s deployment uses Kustomize with HPA auto-scaling (2-6 replicas)
+- Production deployment uses Docker Compose on a Linux server (see `docs/deploy-linux.md`)
 - `doctor()` checks: URL reachability, auth validity, capability override sanity

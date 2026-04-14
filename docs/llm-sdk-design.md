@@ -18,7 +18,7 @@
 ├──────────────────────────────────────────────────────────────────┤
 │  L3  路由层   LiteLLM Proxy                                      │
 │               开发：localhost:4000                               │
-│               生产：litellm-proxy.llm-system:4000 (K8s)         │
+│               生产：http://<服务器IP>:4000                      │
 │               模型路由 · fallback · Key 集中管理 · 限流          │
 ├──────────────────────────────────────────────────────────────────┤
 │  L4  模型层   Anthropic · OpenAI · Gemini · Ollama(仅开发)      │
@@ -38,7 +38,7 @@
 
 ## 二、capability tag 体系（贯穿全系统的核心约定）
 
-tag 是业务层表达「需要什么能力」的唯一词汇，在 SDK 层转换为 model_name，再由 Proxy 路由到实际模型。**此表是整个系统的唯一约定来源，config.yaml、SDK TAG_MODEL_MAP、K8s ConfigMap 三处必须与此表保持一致。**
+tag 是业务层表达「需要什么能力」的唯一词汇，在 SDK 层转换为 model_name，再由 Proxy 路由到实际模型。**此表是整个系统的唯一约定来源，config.yaml 和 SDK TAG_MODEL_MAP 两处必须与此表保持一致。**
 
 ```
 capability tag  SDK 默认 model_name    config.yaml 实际模型               生产可用
@@ -321,15 +321,15 @@ c = anthropic.Anthropic(api_key="sk-ant-...")  # ← 不应出现在业务层
 
 ### 4.1 两套环境配置对比
 
-| 配置项 | 开发环境 | 生产（K8s） |
-|-------|---------|------------|
-| config.yaml 加载方式 | 本地文件，`litellm --config` | K8s ConfigMap，挂载到 Pod |
-| 厂商 API Keys | 本地 `.env` | K8s Secret `litellm-secrets` |
-| `LITELLM_MASTER_KEY` | 本地 `.env` | K8s Secret `litellm-secrets` |
-| Proxy 地址（业务侧） | `http://localhost:4000` | `http://litellm-proxy.llm-system:4000` |
-| `LLM_API_KEY`（业务侧） | 本地 `.env` | K8s Secret `<service>-secrets` |
-| `LLM_MODEL_*` tag 覆盖 | 本地 `.env` | K8s ConfigMap `<service>-config` |
-| `local` tag 可用性 | **可用**（本地跑 Ollama） | **不可用**（集群内无 Ollama） |
+| 配置项 | 开发环境 | 生产（Linux 服务器） |
+|-------|---------|--------------------|
+| config.yaml 加载方式 | 本地文件，`litellm --config` | Docker volume 挂载 |
+| 厂商 API Keys | 本地 `.env` | 服务器 `.env.prod` |
+| `LITELLM_MASTER_KEY` | 本地 `.env` | 服务器 `.env.prod` |
+| Proxy 地址（业务侧） | `http://localhost:4000` | `http://<服务器IP>:4000` |
+| `LLM_API_KEY`（业务侧） | 本地 `.env` | 各服务自己的 `.env` |
+| `LLM_MODEL_*` tag 覆盖 | 本地 `.env` | 各服务自己的 `.env` |
+| `local` tag 可用性 | **可用**（本地跑 Ollama） | **不可用**（服务器无 Ollama） |
 
 ### 4.2 本地 .env（仅开发，加入 .gitignore）
 
@@ -404,13 +404,14 @@ my-llm-sdk/
 ├── proxy/
 │   ├── config/
 │   │   └── config.yaml          # Proxy 模型定义（提交 git）
-│   ├── k8s/
-│   │   ├── kustomization.yaml
-│   │   └── litellm/
-│   ├── .env.example             # Proxy 环境模板（提交 git）
+│   ├── docker-compose.yaml      # 生产部署（Linux 服务器）
+│   ├── docker-compose.dev.yaml  # 本地开发
+│   ├── .env.prod.example        # 生产环境模板（提交 git）
+│   ├── .env.example             # 本地开发环境模板（提交 git）
 │   └── start_proxy.py
 │
-├── proxy/.env                   # 真实密钥（.gitignore）
+├── proxy/.env.prod              # 生产真实密钥（.gitignore）
+├── proxy/.env                   # 本地真实密钥（.gitignore）
 ├── .gitignore
 └── README.md
 ```
@@ -419,413 +420,65 @@ my-llm-sdk/
 
 ```
 proxy/.env
-proxy/k8s/litellm/secret.yaml
+proxy/.env.prod
 ```
 
 ---
 
-## 六、Kubernetes 生产部署
+## 六、生产部署（Linux 服务器）
 
-### 6.1 集群拓扑
+### 6.1 部署方式
+
+LiteLLM Proxy 以 Docker 容器运行在 Linux 服务器上，业务服务通过 IP + 端口直接访问：
 
 ```
-Kubernetes Cluster
+Linux Server
 │
-├── namespace: llm-system
-│   ├── Deployment: litellm-proxy (replicas: 2，反亲和性，不同节点)
-│   │   └── 健康检查：startupProbe / livenessProbe / readinessProbe
-│   ├── Service: litellm-proxy (ClusterIP)
-│   │   └── 集群内 DNS：litellm-proxy.llm-system:4000
-│   ├── ConfigMap: litellm-config  ← 挂载 config.yaml
-│   ├── Secret: litellm-secrets    ← 厂商 API Keys + LITELLM_MASTER_KEY
-│   └── HPA: min=2 max=6 cpu=60%
-│
-└── namespace: apps
-    ├── python-agent  → ConfigMap(非敏感) + Secret(LLM_API_KEY)
-    ├── nodejs-tool   → ConfigMap(非敏感) + Secret(LLM_API_KEY)
-    └── go-service    → ConfigMap(非敏感) + Secret(LLM_API_KEY)
+└── Docker: litellm-proxy (port 4000)
+    └── config: proxy/config/config.yaml（挂载只读）
+    └── secrets: proxy/.env.prod（环境变量注入，不进 git）
 
-全部业务服务 → http://litellm-proxy.llm-system:4000（集群内，不过公网）
+业务服务 → http://<服务器IP>:4000
 ```
 
-### 6.2 namespace.yaml
+### 6.2 文件说明
 
-```yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: llm-system
-  labels:
-    app.kubernetes.io/name: llm-system
-```
+| 文件 | 用途 | 是否进 git |
+|------|------|-----------|
+| `proxy/config/config.yaml` | 模型注册表、路由规则 | ✓ |
+| `proxy/docker-compose.yaml` | 生产容器定义 | ✓ |
+| `proxy/.env.prod.example` | 环境变量模板 | ✓ |
+| `proxy/.env.prod` | 真实 API key | **✗ 不进 git** |
 
-### 6.3 configmap.yaml
-
-`config.yaml` 内容嵌入 ConfigMap，**改模型配置无需重建镜像**，触发滚动重启即可。内容与 `proxy/config/config.yaml` 保持一致，**生产版 fallback 链去掉 `local-chat`**。
-
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: litellm-config
-  namespace: llm-system
-data:
-  config.yaml: |
-    model_list:
-      - model_name: auto-chat
-        litellm_params:
-          model: anthropic/claude-sonnet-4-5
-          api_key: os.environ/ANTHROPIC_API_KEY
-        model_info:
-          mode: chat
-          tags: [chat, auto]
-
-      - model_name: auto-vision
-        litellm_params:
-          model: anthropic/claude-opus-4-5
-          api_key: os.environ/ANTHROPIC_API_KEY
-        model_info:
-          mode: chat
-          supports_vision: true
-          tags: [vision, auto]
-
-      - model_name: gpt-chat
-        litellm_params:
-          model: openai/gpt-4o
-          api_key: os.environ/OPENAI_API_KEY
-        model_info:
-          mode: chat
-          tags: [chat, openai]
-
-      - model_name: gpt-vision
-        litellm_params:
-          model: openai/gpt-4o
-          api_key: os.environ/OPENAI_API_KEY
-        model_info:
-          mode: chat
-          supports_vision: true
-          tags: [vision, openai]
-
-      - model_name: gemini-chat
-        litellm_params:
-          model: gemini/gemini-2.0-flash
-          api_key: os.environ/GEMINI_API_KEY
-        model_info:
-          mode: chat
-          tags: [chat, fast, gemini]
-
-      - model_name: gemini-vision
-        litellm_params:
-          model: gemini/gemini-2.0-flash
-          api_key: os.environ/GEMINI_API_KEY
-        model_info:
-          mode: chat
-          supports_vision: true
-          supports_video: true
-          tags: [vision, video-input, gemini]
-
-      - model_name: text-embedding
-        litellm_params:
-          model: openai/text-embedding-3-small
-          api_key: os.environ/OPENAI_API_KEY
-        model_info:
-          mode: embedding
-          tags: [embedding]
-
-      - model_name: gpt-image-gen
-        litellm_params:
-          model: openai/dall-e-3
-          api_key: os.environ/OPENAI_API_KEY
-        model_info:
-          mode: image_generation
-          tags: [image-gen]
-
-    router_settings:
-      routing_strategy: simple-shuffle
-      num_retries: 2
-      timeout: 30
-      retry_after: 3
-      fallbacks:
-        - auto-chat:   [gpt-chat]    # 生产无 local-chat
-        - auto-vision: [gpt-vision]
-        - gemini-chat: [gpt-chat]
-
-    general_settings:
-      master_key: os.environ/LITELLM_MASTER_KEY
-      rpm_limit: 500
-      tpm_limit: 1000000
-      request_timeout: 60
-      default_fallbacks: [gpt-chat]
-```
-
-### 6.4 secret.yaml.example（模板，提交 git）
-
-```yaml
-# secret.yaml.example
-# 真实 secret.yaml 不提交 git
-# 创建方式见下方 kubectl 命令
-apiVersion: v1
-kind: Secret
-metadata:
-  name: litellm-secrets
-  namespace: llm-system
-type: Opaque
-stringData:
-  ANTHROPIC_API_KEY: ""
-  OPENAI_API_KEY: ""
-  GEMINI_API_KEY: ""
-  LITELLM_MASTER_KEY: ""
-```
+### 6.3 首次部署
 
 ```bash
-# 手动创建（不进 git）
-kubectl create secret generic litellm-secrets \
-  --namespace llm-system \
-  --from-literal=ANTHROPIC_API_KEY=sk-ant-... \
-  --from-literal=OPENAI_API_KEY=sk-... \
-  --from-literal=GEMINI_API_KEY=AI... \
-  --from-literal=LITELLM_MASTER_KEY=sk-litellm-...
+git clone <repo> llm-sdk && cd llm-sdk/proxy
+cp .env.prod.example .env.prod   # 填写真实 API key
+docker compose --env-file .env.prod up -d
+curl http://localhost:4000/health/readiness
 ```
 
-### 6.5 deployment.yaml
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: litellm-proxy
-  namespace: llm-system
-  labels:
-    app: litellm-proxy
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: litellm-proxy
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 0     # 滚动更新全程保证有副本可用
-      maxSurge: 1
-  template:
-    metadata:
-      labels:
-        app: litellm-proxy
-    spec:
-      containers:
-        - name: litellm
-          image: ghcr.io/berriai/litellm:main-latest
-          imagePullPolicy: Always
-          ports:
-            - containerPort: 4000
-              name: http
-          args:
-            - "--config"
-            - "/app/config/config.yaml"
-            - "--port"
-            - "4000"
-
-          # 厂商 API Keys 从 Secret 注入
-          envFrom:
-            - secretRef:
-                name: litellm-secrets
-
-          # ── 健康检查三件套 ─────────────────────────────────────────
-
-          # startupProbe：冷启动探针，最多等 60s（6次×10s）
-          # 通过后由 liveness/readiness 接管，期间不触发重启
-          startupProbe:
-            httpGet:
-              path: /health/liveliness
-              port: 4000
-            failureThreshold: 6
-            periodSeconds: 10
-
-          # livenessProbe：进程存活探针
-          # 连续 3 次失败 → kubelet 重启 Pod
-          # 检测：进程死锁、内存泄漏导致无响应
-          livenessProbe:
-            httpGet:
-              path: /health/liveliness
-              port: 4000
-            periodSeconds: 15
-            timeoutSeconds: 5
-            failureThreshold: 3
-
-          # readinessProbe：流量就绪探针
-          # 失败 → 从 Service Endpoints 摘除，不重启
-          # 恢复 → 自动重新加入 Endpoints
-          # 检测：模型 API 连通性（如限流时摘除该 Pod）
-          readinessProbe:
-            httpGet:
-              path: /health/readiness
-              port: 4000
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 2
-            successThreshold: 1
-
-          resources:
-            requests:
-              cpu: "250m"
-              memory: "512Mi"
-            limits:
-              cpu: "1000m"
-              memory: "1Gi"
-
-          volumeMounts:
-            - name: config-volume
-              mountPath: /app/config
-              readOnly: true
-
-      volumes:
-        - name: config-volume
-          configMap:
-            name: litellm-config
-
-      # 两副本不调度到同一节点
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app: litellm-proxy
-                topologyKey: kubernetes.io/hostname
-```
-
-### 6.6 service.yaml
-
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: litellm-proxy
-  namespace: llm-system
-  labels:
-    app: litellm-proxy
-spec:
-  type: ClusterIP           # 仅集群内可达，不暴露公网
-  selector:
-    app: litellm-proxy
-  ports:
-    - name: http
-      port: 4000
-      targetPort: 4000
-      protocol: TCP
-```
-
-集群内访问地址：
-- 完整：`http://litellm-proxy.llm-system.svc.cluster.local:4000`
-- 简写：`http://litellm-proxy.llm-system:4000`
-
-### 6.7 hpa.yaml
-
-```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: litellm-proxy-hpa
-  namespace: llm-system
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: litellm-proxy
-  minReplicas: 2
-  maxReplicas: 6
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 60
-    - type: Resource
-      resource:
-        name: memory
-        target:
-          type: Utilization
-          averageUtilization: 70
-  behavior:
-    scaleUp:
-      stabilizationWindowSeconds: 60    # 扩容前观察 60s，防抖
-    scaleDown:
-      stabilizationWindowSeconds: 300   # 缩容前观察 5min，防频繁缩
-```
-
-### 6.8 kustomization.yaml
-
-```yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-namespace: llm-system
-resources:
-  - litellm/namespace.yaml
-  - litellm/configmap.yaml
-  - litellm/deployment.yaml
-  - litellm/service.yaml
-  - litellm/hpa.yaml
-  # secret.yaml 不在此列表，通过 kubectl create secret 或外部工具管理
-```
-
-### 6.9 业务服务的 K8s 配置
-
-每个业务服务维护自己的 ConfigMap（非敏感）和 Secret（`LLM_API_KEY`），职责分离。
-
-```yaml
-# <service>-config ConfigMap（非敏感，提交 git）
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: python-agent-config
-  namespace: apps
-data:
-  LLM_BASE_URL: "http://litellm-proxy.llm-system:4000"
-  LLM_MODEL_CHAT: "auto-chat"
-  LLM_MODEL_VISION: "auto-vision"
-  LLM_MODEL_VIDEO: "gemini-vision"
-  LLM_MODEL_EMBEDDING: "text-embedding"
-  LLM_MODEL_IMAGE_GEN: "gpt-image-gen"
-  LLM_MODEL_FAST: "gemini-chat"
-  # LLM_MODEL_LOCAL 不配置：生产无 Ollama，禁止使用 local tag
-```
-
-```yaml
-# <service>-secrets Secret（不提交 git）
-apiVersion: v1
-kind: Secret
-metadata:
-  name: python-agent-secrets
-  namespace: apps
-type: Opaque
-stringData:
-  LLM_API_KEY: "sk-litellm-..."    # 与 LITELLM_MASTER_KEY 值相同
-```
-
-### 6.10 运维操作速查
+### 6.4 运维操作速查
 
 ```bash
-# 首次部署
-kubectl apply -k proxy/k8s/
+# 更新模型配置（改 config.yaml 后）
+git pull
+docker compose --env-file .env.prod restart
 
-# 仅更新 config.yaml（改模型配置，无需重建镜像）
-kubectl apply -f proxy/k8s/litellm/configmap.yaml
-kubectl rollout restart deployment/litellm-proxy -n llm-system
-kubectl rollout status deployment/litellm-proxy -n llm-system
+# 升级 LiteLLM 版本（改 docker-compose.yaml image tag 后）
+docker compose --env-file .env.prod pull
+docker compose --env-file .env.prod up -d
 
-# 更新 LiteLLM 版本（改 deployment.yaml 的 image tag）
-kubectl apply -f proxy/k8s/litellm/deployment.yaml
-kubectl rollout status deployment/litellm-proxy -n llm-system
-kubectl rollout undo deployment/litellm-proxy -n llm-system   # 回滚
+# 查看日志
+docker compose logs -f
 
-# 日常查看
-kubectl get pods -n llm-system
-kubectl get hpa  -n llm-system
-kubectl logs -l app=litellm-proxy -n llm-system --follow
-kubectl describe pod -l app=litellm-proxy -n llm-system       # 查健康检查详情
+# 更换 API key
+vim .env.prod
+docker compose --env-file .env.prod restart
 ```
+
+详见 [Linux 部署指南](deploy-linux.md)。
 
 ---
 
@@ -851,8 +504,8 @@ kubectl describe pod -l app=litellm-proxy -n llm-system       # 查健康检查�
 - [x] 7 个 capability tag + 自动 capability 推断
 - [x] 多模态图片输入（vision）、视频输入（video-input）
 - [x] `config.yaml` 完整模型配置（含 fallback 链）
-- [x] 开发 `.env` + 生产 K8s 双环境配置体系
-- [x] K8s Deployment + Service + ConfigMap + Secret + HPA + 健康检查三件套
+- [x] 开发 `.env` + 生产 `.env.prod` 双环境配置体系
+- [x] Docker Compose 生产部署 + 本地开发一键启动
 
 ### 阶段二（近期）
 - [ ] 结构化输出（Python Pydantic / TS Zod / Go struct tag）
@@ -884,13 +537,10 @@ LiteLLM Proxy 按 `model_name` 路由，不接受 tag 作为路由键。`capabil
 LiteLLM 库解决「多厂商格式统一」，SDK 层解决「业务语义抽象 + 跨语言复用 + 统一接口契约」。两个问题层次不同。用 Proxy 模式后 SDK 层极薄，三语言都只做 HTTP 调用，不依赖 LiteLLM Python 包，Go 和 Node.js 服务也能复用同一套能力抽象。
 
 **config.yaml 开发/生产为什么共用一份？**
-模型定义本身与环境无关，差异只在两处：API Keys（通过环境变量注入，两套环境各自维护）和 fallback 链（生产的 ConfigMap 中去掉 `local-chat`）。共用一份文件减少维护分叉；K8s ConfigMap 嵌入内容时手动同步（或 CI 自动同步）。
+模型定义本身与环境无关，API Keys 通过各自的环境变量文件（`.env` / `.env.prod`）注入。共用一份 config.yaml 消除维护分叉风险。
 
 **`local` tag 为什么在生产中不可用？**
-Ollama 运行在开发者本机，不在 K8s 集群内。生产 K8s ConfigMap 不配置 `LLM_MODEL_LOCAL`，业务服务若在生产调用 `local` capability，SDK 层仍会映射到默认的 `local-chat`，Proxy 会因为 `local-chat` model 的 `base_url`（localhost:11434）在集群内不可达而报错——这是有意为之的硬约束，防止隐私数据意外路由到公网模型。
+Ollama 运行在开发者本机，生产服务器上没有 Ollama。业务服务若在生产调用 `local` capability，Proxy 会因为 `local-chat` 的 `base_url`（localhost:11434）不可达而报错——这是有意为之的硬约束，防止隐私数据意外路由到公网模型。
 
-**业务服务的 `LLM_API_KEY` 为什么放 Secret 而不是 ConfigMap？**
-`LLM_API_KEY` 是访问 Proxy 的凭证（与 `LITELLM_MASTER_KEY` 值相同），属于敏感信息。ConfigMap 不加密，`kubectl get configmap -o yaml` 可明文读取。非敏感的 `LLM_BASE_URL` 和 `LLM_MODEL_*` 放 ConfigMap，敏感的 `LLM_API_KEY` 放 Secret，职责分离。
-
-**config.yaml 和 K8s ConfigMap 如何保持同步？**
-两者内容基本相同，差异只有 fallback 链（生产去掉 `local-chat`）。推荐做法：CI 流水线中用脚本从 `proxy/config/config.yaml` 生成 K8s ConfigMap，自动应用差异，避免手动维护两份文件产生漂移。
+**业务服务的 `LLM_API_KEY` 如何管理？**
+各业务服务在自己的 `.env` 文件中配置 `LLM_API_KEY`，值与 Proxy 端的 `LITELLM_MASTER_KEY` 一致。`.env` 文件不进 git，通过人工或部署脚本分发。

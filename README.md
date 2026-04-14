@@ -235,21 +235,25 @@ cd sdk/go && go test ./... -v
 
 ---
 
-## 生产部署（Kubernetes）
+## 生产部署（Linux 服务器）
 
 ```bash
-# 创建 secret（不进 git）
-kubectl create secret generic litellm-secrets \
-  --namespace llm-system \
-  --from-literal=SILICONFLOW_API_KEY=sk-... \
-  --from-literal=OPENAI_API_KEY=sk-...        \
-  --from-literal=LITELLM_MASTER_KEY=sk-litellm-...
+# 在服务器上
+git clone <your-repo-url> llm-sdk
+cd llm-sdk/proxy
 
-# 一键部署
-kubectl apply -k proxy/k8s/
+cp .env.prod.example .env.prod   # 填写真实 API key
+docker compose --env-file .env.prod up -d
 
-# 业务服务通过集群 DNS 访问
-# LLM_BASE_URL=http://litellm-proxy.llm-system:4000
+# 验证
+curl http://localhost:4000/health/readiness
 ```
 
-详见 [架构设计](docs/llm-sdk-design.md) | [Proxy 运维手册](docs/proxy-ops.md) | [发布检查清单](docs/release-checklist.md)
+团队成员配置：
+
+```bash
+LLM_BASE_URL=http://<服务器IP>:4000
+LLM_API_KEY=<LITELLM_MASTER_KEY 的值>
+```
+
+详见 [Linux 部署指南](docs/deploy-linux.md) | [Proxy 运维手册](docs/proxy-ops.md) | [架构设计](docs/llm-sdk-design.md) | [发布检查清单](docs/release-checklist.md)
