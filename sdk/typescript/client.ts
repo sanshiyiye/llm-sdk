@@ -23,18 +23,19 @@ import { chatStructured } from './structured'
 import { templates } from './templates'
 import { chatWithTools } from './tools'
 import type { ToolDefinition } from './tools'
+import { runDoctor, DoctorResult } from './doctor'
 
 // ── Capability tag → model_name 映射 ────────────────────────────────────────
 
 export const TAG_MODEL_MAP: Record<string, string> = {
-  'chat':        process.env.LLM_MODEL_CHAT        ?? 'auto-chat',
-  'vision':      process.env.LLM_MODEL_VISION      ?? 'auto-vision',
-  'video-input': process.env.LLM_MODEL_VIDEO        ?? 'gemini-vision',
-  'embedding':   process.env.LLM_MODEL_EMBEDDING   ?? 'text-embedding',
-  'image-gen':   process.env.LLM_MODEL_IMAGE_GEN   ?? 'gpt-image-gen',
-  'fast':        process.env.LLM_MODEL_FAST        ?? 'gemini-chat',
-  'reasoning':   process.env.LLM_MODEL_REASONING   ?? 'auto-reasoning',
-  'local':       process.env.LLM_MODEL_LOCAL       ?? 'local-chat',
+  'chat':        process.env.LLM_MODEL_CHAT        || 'auto-chat',
+  'vision':      process.env.LLM_MODEL_VISION      || 'auto-vision',
+  'video-input': process.env.LLM_MODEL_VIDEO        || 'gemini-vision',
+  'embedding':   process.env.LLM_MODEL_EMBEDDING   || 'text-embedding',
+  'image-gen':   process.env.LLM_MODEL_IMAGE_GEN   || 'gpt-image-gen',
+  'fast':        process.env.LLM_MODEL_FAST        || 'gemini-chat',
+  'reasoning':   process.env.LLM_MODEL_REASONING   || 'auto-reasoning',
+  'local':       process.env.LLM_MODEL_LOCAL       || 'local-chat',
 }
 
 export type Capability = keyof typeof TAG_MODEL_MAP
@@ -270,6 +271,20 @@ export class LLMClient {
     opts: ChatOptions & { maxToolCalls?: number } = {},
   ): Promise<string> {
     return chatWithTools(this as any, prompt, tools, opts)
+  }
+
+  /**
+   * 执行 SDK 健康检查，返回 DoctorResult。
+   *
+   * @example
+   * const result = await client.doctor()
+   * result.print()          // 打印诊断报告
+   * if (!result.ok) throw new Error('LLM SDK 配置异常')
+   */
+  async doctor(): Promise<DoctorResult> {
+    const baseURL = (this.openai as any).baseURL ?? process.env.LLM_BASE_URL ?? 'http://localhost:4000'
+    const apiKey = (this.openai as any).apiKey ?? process.env.LLM_API_KEY ?? 'no-key'
+    return runDoctor(baseURL, apiKey, TAG_MODEL_MAP)
   }
 }
 
