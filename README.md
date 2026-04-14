@@ -1,62 +1,125 @@
 # LLM SDK
 
-多语言 LLM 内部 SDK，Python / TypeScript / Go 三端统一接口，通过 LiteLLM Proxy 路由到 Anthropic、OpenAI、Gemini、Ollama 等模型。
+三分钟接入多语言 LLM，Python / TypeScript / Go 统一接口。
 
 ---
 
-## 架构总览
+## 快速开始（3 分钟）
+
+### 1. 获取连接信息
+
+向平台团队申请：
 
 ```
-业务代码 (L1)
-  ↓  chat() / embed() / image_gen()
-SDK 层 (L2)  llm_client.py · llm_client.ts · llm_client.go
-  ↓  capability tag → model_name
-LiteLLM Proxy (L3)  localhost:4000 | litellm-proxy.llm-system:4000
-  ↓  模型路由 · fallback · Key 管理
-模型 API (L4)  Anthropic · OpenAI · Gemini · Ollama
+LLM_BASE_URL=https://your-proxy.example.com
+LLM_API_KEY=sk-your-team-key
 ```
 
----
-
-## 快速开始
-
-### 1. 启动 Proxy（开发环境）
+### 2. 安装 SDK
 
 ```bash
-pip install "litellm[proxy]"
-cp proxy/.env.example proxy/.env   # 填入 API Keys
-python proxy/start_proxy.py
-```
-
-### 2. Python
-
-```bash
+# Python
 pip install llm-sdk
+
+# TypeScript / Node.js
+npm install @goat/llm-sdk
+
+# Go
+go get github.com/goat/llm-sdk/sdk/go
 ```
 
-```bash
-cd sdk/python
-pip install -e ".[dev]"
-```
+### 3. 发起第一个请求
 
 ```python
-from llm_sdk import client, templates
-from pydantic import BaseModel
+# Python
+import os
+os.environ["LLM_BASE_URL"] = "https://your-proxy.example.com"
+os.environ["LLM_API_KEY"] = "sk-your-team-key"
+
+from llm_sdk import client
+reply = client.chat("你好")
+print(reply["content"])
+```
+
+```typescript
+// TypeScript
+import { client } from '@goat/llm-sdk'
+
+const reply = await client.chat('你好')
+console.log(reply.content)
+```
+
+```go
+// Go
+c := llmclient.New() // 读取 LLM_BASE_URL / LLM_API_KEY 环境变量
+reply, _ := c.Chat(ctx, "你好", nil)
+fmt.Println(reply)
+```
+
+**就这些。** 不需要了解 LiteLLM、不需要配置模型名、不需要管理 API Key。
+
+---
+
+## 诊断问题
+
+遇到连接问题时运行：
+
+```python
+# Python
+from llm_sdk import client
+result = client.doctor()
+result.print()
+```
+
+```typescript
+// TypeScript
+import { client } from '@goat/llm-sdk'
+const result = await client.doctor()
+result.print()
+```
+
+```go
+// Go
+result := c.Doctor(ctx)
+result.Print()
+```
+
+输出示例：
+
+```
+LLM SDK Doctor
+==============
+✓  LLM_BASE_URL       已配置 (https://your-proxy.example.com)
+✓  LLM_API_KEY        已配置
+✓  Proxy 可达          HTTP 200 /health/readiness
+✓  鉴权有效            chat 请求成功
+✓  Capability 配置     7 个 tag 均有效
+
+全部通过，SDK 可正常使用。
+```
+
+---
+
+## 常用 API
+
+```python
+# Python 示例（TypeScript / Go 接口相同）
 
 # 基础对话
-reply = client.chat("你好")
+reply = client.chat("你好")["content"]
 
-# 指定能力
-reply = client.chat("快速回答", capability="fast")
+# 快速模型（延迟敏感）
+reply = client.chat("快速回答", capability="fast")["content"]
 
-# 视觉（自动推断）
-reply = client.chat("描述图片", image_url="https://example.com/img.png")
+# 视觉理解
+reply = client.chat("描述这张图", image_url="https://example.com/img.png")["content"]
 
 # 流式输出
 for chunk in client.chat_stream("写一篇文章"):
     print(chunk, end="", flush=True)
 
-# 结构化输出
+# 结构化输出（Pydantic）
+from pydantic import BaseModel
 class Product(BaseModel):
     name: str
     price: float
@@ -69,123 +132,61 @@ session = client.session(system="你是代码审查助手")
 r1 = session.chat("审查这段代码：...")
 r2 = session.chat("给出修复方案")
 
-# Prompt 模板
-templates.load_dir("../prompts")
-reply = templates.chat_with_template(client, "code_review",
-    language="Python", focus="内存泄漏", code="x = []")
-```
+# 文本向量化
+vec = client.embed("some text")
 
-### 3. TypeScript / Node.js
-
-```bash
-npm install @goat/llm-sdk
-```
-
-```bash
-cd sdk/typescript
-npm install
-```
-
-```typescript
-import { client, templates } from '@goat/llm-sdk'
-import { z } from 'zod'
-
-// 基础对话
-const reply = await client.chat('你好')
-
-// 流式输出
-for await (const chunk of client.chatStream('写一篇文章')) {
-  process.stdout.write(chunk)
-}
-
-// 结构化输出
-const schema = z.object({ name: z.string(), price: z.number() })
-const result = await client.chatStructured('提取商品信息', schema)
-
-// 多轮会话
-const sess = client.session('你是代码审查助手')
-const r1 = await sess.chat('审查这段代码：...')
-const r2 = await sess.chat('给出修复方案')
-
-// Prompt 模板
-templates.loadDir('../prompts')
-const reply2 = await templates.chatWithTemplate(client, 'code_review',
-  { language: 'TypeScript', focus: '类型安全', code: 'const x = 1' })
-```
-
-### 4. Go
-
-```bash
-go get github.com/goat/llm-sdk/sdk/go
-```
-
-```bash
-cd sdk/go
-go test ./...
-```
-
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "github.com/goat/llm-sdk/sdk/go"
-)
-
-func main() {
-    ctx := context.Background()
-    c := llmclient.New()
-
-    // 基础对话
-    reply, _ := c.Chat(ctx, "你好", nil)
-    fmt.Println(reply)
-
-    // 流式输出
-    chunks, errc := c.ChatStream(ctx, "写一篇文章", nil)
-    for chunk := range chunks { fmt.Print(chunk) }
-    if err := <-errc; err != nil { panic(err) }
-
-    // 结构化输出
-    type Product struct {
-        Name  string  `json:"name"`
-        Price float64 `json:"price"`
-    }
-    var p Product
-    _ = c.ChatStructured(ctx, "提取：iPhone 售价 7999", &p, nil)
-    fmt.Println(p.Name, p.Price)
-
-    // 多轮会话
-    sess := c.NewSession("你是代码审查助手")
-    r1, _ := sess.Chat(ctx, "审查这段代码：...", nil)
-    r2, _ := sess.Chat(ctx, "给出修复方案", nil)
-    fmt.Println(r1, r2)
-
-    // Prompt 模板
-    reg := llmclient.NewTemplateRegistry()
-    reg.LoadDir("../prompts")
-    result, _ := reg.ChatWithTemplate(ctx, c, "code_review",
-        map[string]string{"language": "Go", "focus": "并发安全", "code": "var x int"},
-        nil)
-    fmt.Println(result)
-}
+# 图像生成
+url = client.image_gen("a cat on the moon")
 ```
 
 ---
 
 ## Capability Tag 体系
 
-| tag | 默认 model | 说明 | 生产可用 |
-|-----|-----------|------|---------|
-| `chat` | `auto-chat` | 普通对话，含 fallback | ✓ |
-| `vision` | `auto-vision` | 图片理解（自动推断） | ✓ |
-| `video-input` | `gemini-vision` | 视频帧分析 | ✓ |
-| `embedding` | `text-embedding` | 文本向量化 | ✓ |
-| `image-gen` | `gpt-image-gen` | 图像生成 | ✓ |
-| `fast` | `gemini-chat` | 延迟敏感场景 | ✓ |
-| `local` | `local-chat` | 本地/内网模型 | 仅开发 |
+业务代码用 tag，不写死模型名：
 
-所有 tag 可通过环境变量覆盖：`LLM_MODEL_CHAT`, `LLM_MODEL_VISION`, ...
+| tag | 默认模型 | 适用场景 | 生产可用 |
+|-----|---------|---------|---------|
+| `chat` | auto-chat | 普通对话，含 fallback | ✓ |
+| `vision` | auto-vision | 图片理解（有图片时自动推断） | ✓ |
+| `video-input` | gemini-vision | 视频帧分析 | ✓ |
+| `embedding` | text-embedding | 文本向量化 | ✓ |
+| `image-gen` | gpt-image-gen | 图像生成 | ✓ |
+| `fast` | gemini-chat | 延迟敏感场景 | ✓ |
+| `local` | local-chat | 本地 / 内网模型 | **仅开发** |
+
+**需要换模型？** 用环境变量覆盖，不改代码：
+
+```bash
+LLM_MODEL_CHAT=gpt-4o        # 覆盖 chat tag 对应的模型
+LLM_MODEL_FAST=gemini-flash  # 覆盖 fast tag
+```
+
+---
+
+## 本地开发
+
+需要在本地跑完整的 Proxy？一条命令：
+
+```bash
+cp proxy/.env.example proxy/.env   # 填入 provider API key
+docker compose -f proxy/docker-compose.dev.yaml up -d
+```
+
+等 readiness 就绪后正常使用 SDK（`LLM_BASE_URL=http://localhost:4000`）。
+
+详见 [本地开发指南](docs/getting-started-local.md)。
+
+---
+
+## 接入路径选择
+
+| 情况 | 推荐路径 |
+|------|---------|
+| 接入团队共享平台 | [共享 Proxy 接入](docs/getting-started-shared.md)（推荐） |
+| 本地开发 / 自建 Proxy | [本地 Proxy 启动](docs/getting-started-local.md) |
+| 遇到连接 / 鉴权问题 | 运行 `client.doctor()` |
+| 更多常见问题 | [Troubleshooting](docs/troubleshooting.md) |
 
 ---
 
@@ -219,121 +220,7 @@ kubectl create secret generic litellm-secrets \
 kubectl apply -k proxy/k8s/
 
 # 业务服务通过集群 DNS 访问
-# http://litellm-proxy.llm-system:4000
+# LLM_BASE_URL=http://litellm-proxy.llm-system:4000
 ```
 
-详细部署说明见 [llm-sdk-design.md](file:///d:/workspace/AI/llm-sdk/docs/llm-sdk-design.md)。
-
-发布检查清单见 [release-checklist.md](file:///d:/workspace/AI/llm-sdk/docs/release-checklist.md)。
-
-在线文档站点发布后可通过 `https://goat.github.io/llm-sdk/` 访问，内容覆盖根文档、架构设计、发布检查与 Proxy 运维文档。
-
----
-
-## v1.0.0 新特性
-
-### 请求级缓存（Request-level Caching）
-
-相同 prompt + model 自动命中缓存，节省 Token 费用：
-
-```python
-# Python
-from llm_sdk import LLMClient
-c = LLMClient()
-
-# 首次调用 → 访问 API
-r1 = c.chat("解释量子计算")
-
-# 相同调用 → 命中缓存，零 Token 消耗
-r2 = c.chat("解释量子计算")  # 瞬间返回，带 _cached: true 标记
-```
-
-```typescript
-// TypeScript
-const reply = await client.chat('解释量子计算', { cache: true })
-```
-
-### Tool Use / Function Calling
-
-让 LLM 调用你的业务函数：
-
-```python
-# Python
-from llm_sdk import client
-from llm_sdk.tools import llm_tool
-
-@llm_tool
-def get_weather(city: str) -> str:
-    """获取城市天气"""
-    return weather_api.fetch(city)
-
-# SDK 自动处理：LLM 请求工具 → 执行函数 → 返回结果
-reply = client.chat_with_tools("北京今天天气如何？", tools=[get_weather])
-```
-
-```go
-// Go
-type WeatherTool struct{}
-func (w WeatherTool) Execute(ctx context.Context, params interface{}) (string, error) {
-    return "Sunny", nil
-}
-c.ChatWithTools(ctx, "北京天气如何？", tool, nil)
-```
-
-### Prometheus 指标监控
-
-K8s 部署已内置 Prometheus ServiceMonitor：
-
-```bash
-# 部署后自动暴露指标
-kubectl port-forward -n llm-system svc/litellm-proxy 9090:9090
-curl localhost:9090/metrics
-```
-
-关键指标：
-- `litellm_requests_total` — 按模型、状态统计请求数
-- `litellm_tokens_total` — Token 消耗统计
-- `litellm_request_duration_seconds` — 请求延迟分布
-
----
-
-## 目录结构
-
-```
-llm-sdk/
-├── config/
-│   └── config.yaml          # 模型配置（提交 git）
-├── python/                  # Python SDK (v1.0.0)
-│   ├── __init__.py
-├── sdk/
-│   ├── python/
-│   │   ├── llm_sdk/         # Python SDK 包
-│   │   ├── tests/
-│   │   └── pyproject.toml
-│   ├── typescript/          # TypeScript SDK (v1.0.0)
-│   │   ├── index.ts
-│   │   ├── client.ts
-│   │   ├── structured.ts
-│   │   └── tests/
-│   ├── go/                  # Go SDK (v1.0.0)
-│   │   ├── client.go
-│   │   ├── structured.go
-│   │   └── client_test.go
-│   ├── prompts/             # 共享 Prompt 模板
-│   ├── examples/            # SDK 使用示例
-│   └── compat-tests/        # SDK 与 Proxy 的兼容性测试
-├── proxy/
-│   ├── config/
-│   │   └── config.yaml
-│   ├── k8s/
-│   │   ├── kustomization.yaml
-│   │   └── litellm/
-│   ├── tests/
-│   ├── .env.example
-│   └── start_proxy.py
-├── docs/
-│   ├── llm-sdk-design.md
-│   └── llm-sdk-devplan.md
-├── CHANGELOG.md             # 版本变更记录 (v1.0.0)
-└── .gitignore
-```
+详见 [架构设计](docs/llm-sdk-design.md) | [Proxy 运维手册](docs/proxy-ops.md) | [发布检查清单](docs/release-checklist.md)
