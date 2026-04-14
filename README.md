@@ -8,7 +8,7 @@
 
 ### 1. 获取连接信息
 
-向平台团队申请：
+向平台团队申请以下两个配置项：
 
 ```
 LLM_BASE_URL=https://your-proxy.example.com
@@ -28,13 +28,23 @@ npm install @goat/llm-sdk
 go get github.com/goat/llm-sdk/sdk/go
 ```
 
-### 3. 发起第一个请求
+### 3. 配置环境变量（重要：在 import 之前设置）
+
+```bash
+# 推荐：写入 .env 文件，项目启动时自动加载
+LLM_BASE_URL=https://your-proxy.example.com
+LLM_API_KEY=sk-your-team-key
+```
+
+> Python 注意：`TAG_MODEL_MAP` 在 import 时初始化，环境变量必须在 `from llm_sdk import client` **之前**加载。
+> 推荐用 `python-dotenv` 管理 `.env`，或直接通过系统环境变量设置。
+
+### 4. 发起第一个请求
 
 ```python
-# Python
-import os
-os.environ["LLM_BASE_URL"] = "https://your-proxy.example.com"
-os.environ["LLM_API_KEY"] = "sk-your-team-key"
+# Python - 推荐通过 .env 文件配置，避免在代码里写 os.environ
+from dotenv import load_dotenv
+load_dotenv()  # 加载 .env
 
 from llm_sdk import client
 reply = client.chat("你好")
@@ -62,7 +72,7 @@ fmt.Println(reply)
 
 ## 诊断问题
 
-遇到连接问题时运行：
+遇到连接 / 鉴权问题时运行：
 
 ```python
 # Python
@@ -84,19 +94,21 @@ result := c.Doctor(ctx)
 result.Print()
 ```
 
-输出示例：
+正常输出示例：
 
 ```
 LLM SDK Doctor
-==============
-✓  LLM_BASE_URL       已配置 (https://your-proxy.example.com)
-✓  LLM_API_KEY        已配置
-✓  Proxy 可达          HTTP 200 /health/readiness
-✓  鉴权有效            chat 请求成功
-✓  Capability 配置     7 个 tag 均有效
+========================================
+✓  LLM_BASE_URL           已配置 (https://your-proxy.example.com)
+✓  LLM_API_KEY            已配置
+✓  Proxy 可达               HTTP 200 /health/readiness
+✓  鉴权有效                   API key 验证成功
+✓  Capability 配置          7 个 tag 配置正常
 
 全部通过，SDK 可正常使用。
 ```
+
+> 快速测试脚本（含自动加载 .env）：`python test_doctor.py`
 
 ---
 
@@ -143,10 +155,10 @@ url = client.image_gen("a cat on the moon")
 
 ## Capability Tag 体系
 
-业务代码用 tag，不写死模型名：
+业务代码用 tag，不写死模型名。Proxy 侧负责模型路由，业务侧无需关心背后用哪个模型：
 
-| tag | 默认模型 | 适用场景 | 生产可用 |
-|-----|---------|---------|---------|
+| tag | Proxy 路由别名 | 适用场景 | 生产可用 |
+|-----|--------------|---------|---------|
 | `chat` | auto-chat | 普通对话，含 fallback | ✓ |
 | `vision` | auto-vision | 图片理解（有图片时自动推断） | ✓ |
 | `video-input` | gemini-vision | 视频帧分析 | ✓ |
@@ -158,22 +170,40 @@ url = client.image_gen("a cat on the moon")
 **需要换模型？** 用环境变量覆盖，不改代码：
 
 ```bash
-LLM_MODEL_CHAT=gpt-4o        # 覆盖 chat tag 对应的模型
-LLM_MODEL_FAST=gemini-flash  # 覆盖 fast tag
+LLM_MODEL_CHAT=openai/gpt-4o       # 覆盖 chat tag 对应的模型
+LLM_MODEL_FAST=siliconflow-chat    # 覆盖 fast tag
 ```
+
+> 注意：空字符串等同于未设置，会自动回退到默认值。
 
 ---
 
 ## 本地开发
 
-需要在本地跑完整的 Proxy？一条命令：
+### 方式 A：Python 直接启动
+
+```bash
+pip install "litellm[proxy]"
+cp proxy/.env.example proxy/.env   # 填入 provider API key
+python proxy/start_proxy.py
+```
+
+### 方式 B：Docker 一键启动
 
 ```bash
 cp proxy/.env.example proxy/.env   # 填入 provider API key
 docker compose -f proxy/docker-compose.dev.yaml up -d
+
+# 等待就绪（约 10-15 秒）
+curl http://localhost:4000/health/readiness
 ```
 
-等 readiness 就绪后正常使用 SDK（`LLM_BASE_URL=http://localhost:4000`）。
+启动后配置 SDK：
+
+```bash
+LLM_BASE_URL=http://localhost:4000
+LLM_API_KEY=sk-local-dev   # 与 proxy/.env 中 LITELLM_MASTER_KEY 一致
+```
 
 详见 [本地开发指南](docs/getting-started-local.md)。
 
@@ -185,7 +215,7 @@ docker compose -f proxy/docker-compose.dev.yaml up -d
 |------|---------|
 | 接入团队共享平台 | [共享 Proxy 接入](docs/getting-started-shared.md)（推荐） |
 | 本地开发 / 自建 Proxy | [本地 Proxy 启动](docs/getting-started-local.md) |
-| 遇到连接 / 鉴权问题 | 运行 `client.doctor()` |
+| 遇到连接 / 鉴权问题 | 运行 `client.doctor()` 或 `python test_doctor.py` |
 | 更多常见问题 | [Troubleshooting](docs/troubleshooting.md) |
 
 ---
@@ -211,9 +241,8 @@ cd sdk/go && go test ./... -v
 # 创建 secret（不进 git）
 kubectl create secret generic litellm-secrets \
   --namespace llm-system \
-  --from-literal=ANTHROPIC_API_KEY=sk-ant-... \
-  --from-literal=OPENAI_API_KEY=sk-... \
-  --from-literal=GEMINI_API_KEY=AI... \
+  --from-literal=SILICONFLOW_API_KEY=sk-... \
+  --from-literal=OPENAI_API_KEY=sk-...        \
   --from-literal=LITELLM_MASTER_KEY=sk-litellm-...
 
 # 一键部署
