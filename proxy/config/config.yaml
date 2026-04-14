@@ -11,16 +11,18 @@ model_list:
 
   - model_name: auto-chat
     litellm_params:
-      model: anthropic/claude-sonnet-4-5
-      api_key: os.environ/ANTHROPIC_API_KEY
+      model: openai/Pro/zai-org/GLM-4.7
+      api_base: https://api.siliconflow.cn/v1
+      api_key: os.environ/SILICONFLOW_API_KEY
     model_info:
       mode: chat
       tags: [chat, auto]
 
   - model_name: auto-vision
     litellm_params:
-      model: anthropic/claude-opus-4-5
-      api_key: os.environ/ANTHROPIC_API_KEY
+      model: openai/Pro/zai-org/GLM-4.5V
+      api_base: https://api.siliconflow.cn/v1
+      api_key: os.environ/SILICONFLOW_API_KEY
     model_info:
       mode: chat
       supports_vision: true
@@ -65,21 +67,23 @@ model_list:
 
   - model_name: gemini-chat
     litellm_params:
-      model: gemini/gemini-2.0-flash
-      api_key: os.environ/GEMINI_API_KEY
+      model: openai/Pro/zai-org/GLM-4.7
+      api_base: https://api.siliconflow.cn/v1
+      api_key: os.environ/SILICONFLOW_API_KEY
     model_info:
       mode: chat
-      tags: [chat, fast, gemini]
+      tags: [chat, fast, siliconflow]
 
   - model_name: gemini-vision
     litellm_params:
-      model: gemini/gemini-2.0-flash
-      api_key: os.environ/GEMINI_API_KEY
+      model: openai/Pro/zai-org/GLM-4.5V
+      api_base: https://api.siliconflow.cn/v1
+      api_key: os.environ/SILICONFLOW_API_KEY
     model_info:
       mode: chat
       supports_vision: true
       supports_video: true
-      tags: [vision, video-input, gemini]
+      tags: [vision, video-input, siliconflow]
 
   - model_name: gemini-image-gen
     litellm_params:
@@ -146,9 +150,9 @@ router_settings:
   timeout: 300  # 把路由超时从 30s 提高到 300s
   retry_after: 3
   fallbacks:
-    - auto-chat:   [gpt-chat, local-chat]   # local-chat 仅开发生效
-    - auto-vision: [gpt-vision]
-    - gemini-chat: [gpt-chat]
+    - auto-chat:   [siliconflow-chat, gpt-chat, local-chat]
+    - auto-vision: [siliconflow-vision, gpt-vision]
+    - gemini-chat: [siliconflow-chat, gpt-chat]
 
 # ── 全局设置 ────────────────────────────────────────────────────
 
