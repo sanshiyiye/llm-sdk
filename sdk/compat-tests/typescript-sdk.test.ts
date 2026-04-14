@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
 import { LLMClient, TAG_MODEL_MAP } from '../typescript/client'
+import { DoctorResult } from '../typescript/doctor'
 import { llmTool } from '../typescript/tools'
 
 function chatResp(content: string) {
@@ -160,5 +161,60 @@ describe('TypeScript compatibility', () => {
 
     await expect(client.chat('auth')).rejects.toThrow()
     expect(mockCreate).toHaveBeenCalledTimes(1)
+  })
+
+  // ── Doctor 契约 ──────────────────────────────────────────────────────────
+
+  it('DoctorResult has ok, checks, and print()', () => {
+    const result = new DoctorResult([
+      { name: 'LLM_BASE_URL', ok: true, message: '已配置' },
+      { name: 'LLM_API_KEY', ok: true, message: '已配置' },
+      { name: 'Proxy 可达', ok: true, message: 'HTTP 200' },
+      { name: '鉴权有效', ok: true, message: 'API key 验证成功' },
+      { name: 'Capability 配置', ok: true, message: '7 个 tag 配置正常' },
+    ])
+
+    expect(typeof result.ok).toBe('boolean')
+    expect(result.ok).toBe(true)
+    expect(Array.isArray(result.checks)).toBe(true)
+    expect(result.checks.length).toBe(5)
+    expect(typeof result.print).toBe('function')
+  })
+
+  it('DoctorResult.ok is false when any check fails', () => {
+    const result = new DoctorResult([
+      { name: 'LLM_BASE_URL', ok: true, message: '已配置' },
+      { name: '鉴权有效', ok: false, message: '鉴权失败', fix: '检查 key' },
+    ])
+    expect(result.ok).toBe(false)
+  })
+
+  it('LLMClient exposes doctor() method', () => {
+    const client = createClient()
+    expect(typeof (client as any).doctor).toBe('function')
+  })
+
+  it('doctor() returns DoctorResult with 5 named checks when proxy is healthy', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ status: 200, ok: true })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const client = createClient()
+    const origEnv = { ...process.env }
+    process.env.LLM_BASE_URL = 'http://localhost:4000'
+    process.env.LLM_API_KEY = 'sk-test'
+
+    try {
+      const result = await (client as any).doctor()
+      expect(result).toBeInstanceOf(DoctorResult)
+      const names = result.checks.map((c: any) => c.name)
+      expect(names).toContain('LLM_BASE_URL')
+      expect(names).toContain('LLM_API_KEY')
+      expect(names).toContain('Proxy 可达')
+      expect(names).toContain('鉴权有效')
+      expect(names).toContain('Capability 配置')
+    } finally {
+      process.env = origEnv
+      vi.unstubAllGlobals()
+    }
   })
 })

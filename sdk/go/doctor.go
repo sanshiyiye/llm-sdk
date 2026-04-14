@@ -7,9 +7,7 @@
 package llmclient
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -146,21 +144,11 @@ func (c *Client) Doctor(ctx context.Context) *DoctorResult {
 	}
 
 	// ── 4. 鉴权有效性 ─────────────────────────────────────────────────────────
+	// 用 GET /models 验证 key，避免触发实际推理（不依赖具体模型是否可用）
 	if proxyReachable {
-		fastModel := c.TagMap["fast"]
-		if fastModel == "" {
-			fastModel = "gemini-chat"
-		}
-		payload := map[string]any{
-			"model":      fastModel,
-			"messages":   []map[string]string{{"role": "user", "content": "hi"}},
-			"max_tokens": 1,
-		}
-		body, _ := json.Marshal(payload)
-		authReq, _ := http.NewRequestWithContext(ctx, http.MethodPost,
-			c.BaseURL+"/chat/completions", bytes.NewReader(body))
+		authReq, _ := http.NewRequestWithContext(ctx, http.MethodGet,
+			c.BaseURL+"/models", nil)
 		authReq.Header.Set("Authorization", "Bearer "+c.APIKey)
-		authReq.Header.Set("Content-Type", "application/json")
 		authClient := &http.Client{Timeout: 10 * time.Second}
 		authResp, err := authClient.Do(authReq)
 		if err != nil {
@@ -178,7 +166,7 @@ func (c *Client) Doctor(ctx context.Context) *DoctorResult {
 				result.Checks = append(result.Checks, DoctorCheck{
 					Name:    "鉴权有效",
 					OK:      true,
-					Message: "chat 请求成功",
+					Message: "API key 验证成功",
 				})
 			case 401, 403:
 				result.Checks = append(result.Checks, DoctorCheck{

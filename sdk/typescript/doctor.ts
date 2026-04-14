@@ -49,6 +49,16 @@ export class DoctorResult {
   }
 }
 
+const tagEnvMap: Record<string, string> = {
+  'chat':        'LLM_MODEL_CHAT',
+  'vision':      'LLM_MODEL_VISION',
+  'video-input': 'LLM_MODEL_VIDEO',
+  'embedding':   'LLM_MODEL_EMBEDDING',
+  'image-gen':   'LLM_MODEL_IMAGE_GEN',
+  'fast':        'LLM_MODEL_FAST',
+  'local':       'LLM_MODEL_LOCAL',
+}
+
 /**
  * 执行所有健康检查，返回 DoctorResult。
  * 设计原则：每项检查独立，超时设短（5s），错误给出 fix hint。
@@ -130,26 +140,18 @@ export async function runDoctor(
   }
 
   // ── 4. 鉴权有效性 ─────────────────────────────────────────────────────────
+  // 用 GET /models 验证 key，避免触发实际推理（不依赖具体模型是否可用）
   if (proxyReachable) {
     try {
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 10000)
-      const resp = await fetch(`${baseURL}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: tagMap['fast'] ?? 'gemini-chat',
-          messages: [{ role: 'user', content: 'hi' }],
-          max_tokens: 1,
-        }),
+      const resp = await fetch(`${baseURL}/models`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
         signal: controller.signal,
       }).finally(() => clearTimeout(timeout))
 
       if (resp.status === 200 || resp.status === 201) {
-        checks.push({ name: '鉴权有效', ok: true, message: 'chat 请求成功' })
+        checks.push({ name: '鉴权有效', ok: true, message: 'API key 验证成功' })
       } else if (resp.status === 401 || resp.status === 403) {
         checks.push({
           name: '鉴权有效',

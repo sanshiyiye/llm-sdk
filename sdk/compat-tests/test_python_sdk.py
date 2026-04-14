@@ -201,3 +201,58 @@ def test_auth_error_does_not_retry(mock_openai):
         client.chat("auth")
 
     assert mock_openai.chat.completions.create.call_count == 1
+
+
+# ── Doctor 契约 ───────────────────────────────────────────────────────────────
+
+def test_doctor_result_contract():
+    """DoctorResult 应有 ok 属性、checks 列表、print 方法"""
+    from llm_sdk.doctor import DoctorResult, DoctorCheck
+
+    result = DoctorResult(checks=[
+        DoctorCheck(name="LLM_BASE_URL", ok=True, message="已配置"),
+        DoctorCheck(name="LLM_API_KEY", ok=True, message="已配置"),
+        DoctorCheck(name="Proxy 可达", ok=True, message="HTTP 200"),
+        DoctorCheck(name="鉴权有效", ok=True, message="API key 验证成功"),
+        DoctorCheck(name="Capability 配置", ok=True, message="7 个 tag 配置正常"),
+    ])
+
+    assert isinstance(result.ok, bool)
+    assert result.ok is True
+    assert isinstance(result.checks, list)
+    assert len(result.checks) == 5
+    assert all(hasattr(c, "name") and hasattr(c, "ok") and hasattr(c, "message") for c in result.checks)
+    assert callable(result.print)
+
+
+def test_doctor_check_names_contract(monkeypatch):
+    """doctor() 应返回恰好包含 5 项检查，名称固定"""
+    from unittest.mock import MagicMock, patch
+
+    monkeypatch.setenv("LLM_BASE_URL", "http://localhost:4000")
+    monkeypatch.setenv("LLM_API_KEY", "sk-test")
+
+    def _mock_get(url, **kwargs):
+        resp = MagicMock()
+        resp.status_code = 200
+        return resp
+
+    mock_client = MagicMock()
+    mock_client.get.side_effect = _mock_get
+    mock_client.close = MagicMock()
+
+    with patch("httpx.Client", return_value=mock_client):
+        from llm_sdk.doctor import run_doctor
+        result = run_doctor("http://localhost:4000", "sk-test", {
+            "chat": "auto-chat", "fast": "gemini-chat",
+        })
+
+    expected_names = {"LLM_BASE_URL", "LLM_API_KEY", "Proxy 可达", "鉴权有效", "Capability 配置"}
+    actual_names = {c.name for c in result.checks}
+    assert actual_names == expected_names
+
+
+def test_client_has_doctor_method():
+    """LLMClient 应暴露 doctor() 方法"""
+    client = LLMClient()
+    assert callable(getattr(client, "doctor", None))

@@ -219,3 +219,78 @@ func TestGoAuthErrorDoesNotRetry(t *testing.T) {
 		t.Fatalf("expected no retry on auth error, got %d calls", calls)
 	}
 }
+
+// ── Doctor 契约测试 ──────────────────────────────────────────────────────────
+
+func TestGoDoctorResultContract(t *testing.T) {
+	// DoctorResult 应有 Checks slice、OK() 方法、Print() 方法
+	result := &llmclient.DoctorResult{
+		Checks: []llmclient.DoctorCheck{
+			{Name: "LLM_BASE_URL", OK: true, Message: "已配置"},
+			{Name: "LLM_API_KEY", OK: true, Message: "已配置"},
+			{Name: "Proxy 可达", OK: true, Message: "HTTP 200"},
+			{Name: "鉴权有效", OK: true, Message: "API key 验证成功"},
+			{Name: "Capability 配置", OK: true, Message: "7 个 tag 配置正常"},
+		},
+	}
+
+	if !result.OK() {
+		t.Fatal("expected OK() to return true when all checks pass")
+	}
+	if len(result.Checks) != 5 {
+		t.Fatalf("expected 5 checks, got %d", len(result.Checks))
+	}
+	// Print should not panic
+	result.Print()
+}
+
+func TestGoDoctorResultNotOKWhenAnyFails(t *testing.T) {
+	result := &llmclient.DoctorResult{
+		Checks: []llmclient.DoctorCheck{
+			{Name: "LLM_BASE_URL", OK: true, Message: "已配置"},
+			{Name: "鉴权有效", OK: false, Message: "鉴权失败", Fix: "检查 key"},
+		},
+	}
+	if result.OK() {
+		t.Fatal("expected OK() to return false when any check fails")
+	}
+}
+
+func TestGoDoctorReturns5Checks(t *testing.T) {
+	// Proxy server: /health/readiness → 200, /models → 200
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/health/readiness" {
+			w.WriteHeader(200)
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+			return
+		}
+		if r.URL.Path == "/models" {
+			w.WriteHeader(200)
+			_, _ = w.Write([]byte(`{"data":[]}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer server.Close()
+
+	t.Setenv("LLM_BASE_URL", server.URL)
+	t.Setenv("LLM_API_KEY", "sk-test")
+
+	c := newCompatClient(server)
+	result := c.Doctor(context.Background())
+
+	if len(result.Checks) != 5 {
+		t.Fatalf("expected 5 checks, got %d", len(result.Checks))
+	}
+
+	expectedNames := map[string]bool{
+		"LLM_BASE_URL": true, "LLM_API_KEY": true,
+		"Proxy 可达": true, "鉴权有效": true, "Capability 配置": true,
+	}
+	for _, c := range result.Checks {
+		if !expectedNames[c.Name] {
+			t.Errorf("unexpected check name: %q", c.Name)
+		}
+	}
+}
