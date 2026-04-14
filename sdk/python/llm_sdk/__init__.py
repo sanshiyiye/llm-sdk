@@ -24,6 +24,7 @@ LLM SDK - Python
 
 from .cache import TTLCache, RedisCache, create_cache, build_cache_key
 from .client import LLMClient, TAG_MODEL_MAP, client
+from .doctor import DoctorResult, DoctorCheck
 from .errors import (
     AuthError,
     LLMError,
@@ -71,6 +72,10 @@ __all__ = [
     "chat_structured",
     "TemplateRegistry",
     "templates",
+    # Doctor
+    "DoctorResult",
+    "DoctorCheck",
+    # Errors
     "LLMError",
     "RateLimitError",
     "TimeoutError",

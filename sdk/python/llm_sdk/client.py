@@ -37,13 +37,13 @@ from .errors import (
 # ── Capability tag → model_name 映射 ────────────────────────────────────────
 
 TAG_MODEL_MAP: dict[str, str] = {
-    "chat": os.getenv("LLM_MODEL_CHAT", "auto-chat"),
-    "vision": os.getenv("LLM_MODEL_VISION", "auto-vision"),
-    "video-input": os.getenv("LLM_MODEL_VIDEO", "gemini-vision"),
-    "embedding": os.getenv("LLM_MODEL_EMBEDDING", "text-embedding"),
-    "image-gen": os.getenv("LLM_MODEL_IMAGE_GEN", "gpt-image-gen"),
-    "fast": os.getenv("LLM_MODEL_FAST", "gemini-chat"),
-    "local": os.getenv("LLM_MODEL_LOCAL", "local-chat"),
+    "chat":        os.getenv("LLM_MODEL_CHAT", "")        or "auto-chat",
+    "vision":      os.getenv("LLM_MODEL_VISION", "")      or "auto-vision",
+    "video-input": os.getenv("LLM_MODEL_VIDEO", "")       or "gemini-vision",
+    "embedding":   os.getenv("LLM_MODEL_EMBEDDING", "")   or "text-embedding",
+    "image-gen":   os.getenv("LLM_MODEL_IMAGE_GEN", "")   or "gpt-image-gen",
+    "fast":        os.getenv("LLM_MODEL_FAST", "")        or "gemini-chat",
+    "local":       os.getenv("LLM_MODEL_LOCAL", "")       or "local-chat",
 }
 
 _RETRY_STATUSES = {500, 502, 503, 504}
@@ -284,6 +284,21 @@ class LLMClient:
         from .session import Session
 
         return Session(self, system=system)
+
+    def doctor(self) -> "DoctorResult":
+        """执行 SDK 健康检查，返回 DoctorResult。
+
+        示例:
+            result = client.doctor()
+            result.print()          # 打印人类可读的诊断报告
+            assert result.ok        # 全部通过才继续
+
+        Returns:
+            DoctorResult: 包含所有检查结果，可通过 .ok / .checks / .print() 使用
+        """
+        from .doctor import run_doctor, DoctorResult
+
+        return run_doctor(self._base_url, self._api_key, TAG_MODEL_MAP)
 
 
 # ── 工具函数 ─────────────────────────────────────────────────────────────────
